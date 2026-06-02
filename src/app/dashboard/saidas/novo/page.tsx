@@ -89,7 +89,7 @@ export default function NovaSaidaPage() {
   }
 
   return (
-    <div className="max-w-xl mx-auto space-y-6 pb-24">
+    <div className="max-w-xl mx-auto space-y-6 pb-32">
       <div className="flex items-center gap-3">
         <Link href="/dashboard/saidas" className="p-2 hover:bg-slate-100 rounded-lg transition text-slate-500">
           <ArrowLeft className="w-5 h-5" />

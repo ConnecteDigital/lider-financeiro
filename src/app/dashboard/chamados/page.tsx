@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Plus, Search, CheckCircle, XCircle, Clock, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
-import { getCalls } from '@/lib/db/calls'
+import { useRouter } from 'next/navigation'
+import { getCalls, updateCall } from '@/lib/db/calls'
 
 type Status = 'todos' | 'agendado' | 'aprovado' | 'nao_quis_visita' | 'nao_aprovou' | 'cancelado'
 
@@ -38,12 +39,32 @@ const filters: { value: Status; label: string }[] = [
 ]
 
 export default function ChamadosPage() {
+  const router = useRouter()
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<Status>('todos')
   const [calls, setCalls] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [quickUpdating, setQuickUpdating] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  async function handleQuickStatus(e: React.MouseEvent, callId: string, newStatus: string) {
+    e.preventDefault()
+    e.stopPropagation()
+    setQuickUpdating(callId + newStatus)
+    try {
+      await updateCall(callId, { status: newStatus })
+      if (newStatus === 'aprovado') {
+        router.push(`/dashboard/chamados/${callId}/editar`)
+      } else {
+        await load()
+      }
+    } catch {
+      alert('Erro ao atualizar. Tente novamente.')
+    } finally {
+      setQuickUpdating(null)
+    }
+  }
 
   const handleSearchChange = (value: string) => {
     setSearch(value)
@@ -125,34 +146,53 @@ export default function ChamadosPage() {
             const iconColor = c.status === 'aprovado' ? 'text-emerald-500' : c.status === 'agendado' ? 'text-blue-500' : c.status === 'cancelado' ? 'text-red-500' : 'text-zinc-400'
 
             return (
-              <Link key={c.id} href={`/dashboard/chamados/${c.id}`}
-                className="flex items-start gap-3 bg-white rounded-2xl border border-zinc-100 p-4 hover:border-orange-200 hover:shadow-sm transition active:scale-[0.99]">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${iconBg}`}>
-                  <StatusIcon className={`w-5 h-5 ${iconColor}`} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="font-semibold text-zinc-900 text-sm truncate">
-                      {c.client?.name ?? c.contact_name ?? 'Sem identificacao'}
-                    </p>
-                    <ChevronRight className="w-4 h-4 text-zinc-300 flex-shrink-0" />
+              <div key={c.id} className="bg-white rounded-2xl border border-zinc-100 hover:border-orange-200 hover:shadow-sm transition">
+                <Link href={`/dashboard/chamados/${c.id}`}
+                  className="flex items-start gap-3 p-4 active:scale-[0.99]">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${iconBg}`}>
+                    <StatusIcon className={`w-5 h-5 ${iconColor}`} />
                   </div>
-                  {c.service_category && <p className="text-xs text-zinc-500 mt-0.5">{c.service_category}</p>}
-                  <div className="flex items-center gap-2 mt-2 flex-wrap">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${cfg?.color}`}>{cfg?.label}</span>
-                    <span className="text-xs text-zinc-400">{new Date(c.date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
-                    <span className="text-xs text-zinc-400">{originLabel[c.origin]}</span>
-                  </div>
-                  {so && (
-                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-zinc-50">
-                      <span className={`text-xs font-semibold ${pay?.color}`}>{pay?.label}</span>
-                      <span className="text-sm font-bold text-zinc-800">
-                        R$ {Number(so.total_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-semibold text-zinc-900 text-sm truncate">
+                        {c.client?.name ?? c.contact_name ?? 'Sem identificacao'}
+                      </p>
+                      <ChevronRight className="w-4 h-4 text-zinc-300 flex-shrink-0" />
                     </div>
-                  )}
-                </div>
-              </Link>
+                    {c.service_category && <p className="text-xs text-zinc-500 mt-0.5">{c.service_category}</p>}
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${cfg?.color}`}>{cfg?.label}</span>
+                      <span className="text-xs text-zinc-400">{new Date(c.date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                      <span className="text-xs text-zinc-400">{originLabel[c.origin]}</span>
+                    </div>
+                    {so && (
+                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-zinc-50">
+                        <span className={`text-xs font-semibold ${pay?.color}`}>{pay?.label}</span>
+                        <span className="text-sm font-bold text-zinc-800">
+                          R$ {Number(so.total_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </Link>
+                {/* Quick actions for agendado */}
+                {c.status === 'agendado' && (
+                  <div className="flex gap-2 px-4 pb-3 pt-0">
+                    <button
+                      onClick={e => handleQuickStatus(e, c.id, 'aprovado')}
+                      disabled={quickUpdating === c.id + 'aprovado'}
+                      className="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition disabled:opacity-50">
+                      {quickUpdating === c.id + 'aprovado' ? '...' : '✓ Aprovado?'}
+                    </button>
+                    <button
+                      onClick={e => handleQuickStatus(e, c.id, 'nao_aprovou')}
+                      disabled={quickUpdating === c.id + 'nao_aprovou'}
+                      className="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition disabled:opacity-50">
+                      {quickUpdating === c.id + 'nao_aprovou' ? '...' : '✗ Recusado?'}
+                    </button>
+                  </div>
+                )}
+              </div>
             )
           })}
         </div>

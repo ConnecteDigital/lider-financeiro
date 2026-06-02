@@ -8,6 +8,7 @@ import { createCall } from '@/lib/db/calls'
 import { createServiceOrder } from '@/lib/db/service-orders'
 import { getClients, createClient_ } from '@/lib/db/clients'
 import { getTeams } from '@/lib/db/teams'
+import { getAuxiliaries } from '@/lib/db/auxiliaries'
 import { createClient as createSupabaseClient } from '@/lib/supabase/client'
 
 type ServiceExecType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
@@ -58,6 +59,7 @@ export default function NovoChamadoPage() {
   const [error, setError] = useState('')
   const [clients, setClients] = useState<any[]>([])
   const [teams, setTeams] = useState<any[]>([])
+  const [auxiliaries, setAuxiliaries] = useState<any[]>([])
   const [savedCallId, setSavedCallId] = useState<string | null>(null)
   const [savedOsNumber, setSavedOsNumber] = useState<string | null>(null)
   const [attachments, setAttachments] = useState<any[]>([])
@@ -71,6 +73,7 @@ export default function NovoChamadoPage() {
   const [callNotes, setCallNotes] = useState('')
   const [clientId, setClientId] = useState('')
   const [contactName, setContactName] = useState('')
+  const [contactPhone, setContactPhone] = useState('')
 
   // Agendamento
   const [scheduledDate, setScheduledDate] = useState(localToday())
@@ -104,11 +107,13 @@ export default function NovoChamadoPage() {
   const [hasGuarantee90, setHasGuarantee90] = useState(false)
   const [hasNoGuarantee, setHasNoGuarantee] = useState(false)
   const [teamId, setTeamId] = useState('')
+  const [auxiliaryId, setAuxiliaryId] = useState('')
   const [driver, setDriver] = useState('')
   const [nfNumber, setNfNumber] = useState('')
   const [vehicle, setVehicle] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('')
+  const [otherServiceValue, setOtherServiceValue] = useState(0)
   const [amountPaid, setAmountPaid] = useState(0)
   const [remainingAmount, setRemainingAmount] = useState(0)
   const [remainingDueDate, setRemainingDueDate] = useState('')
@@ -125,8 +130,8 @@ export default function NovoChamadoPage() {
   const [ownOtherCost, setOwnOtherCost] = useState(0)
 
   useEffect(() => {
-    Promise.all([getClients(), getTeams()])
-      .then(([c, t]) => { setClients(c); setTeams(t) })
+    Promise.all([getClients(), getTeams(), getAuxiliaries()])
+      .then(([c, t, a]) => { setClients(c); setTeams(t); setAuxiliaries(a) })
       .catch(console.error)
   }, [])
 
@@ -168,7 +173,7 @@ export default function NovoChamadoPage() {
 
   const allItems = isApproved ? buildItemsFromCalcs() : []
   const subtotal = allItems.reduce((s, i) => s + i.quantity * i.unit_price, 0)
-  const total = subtotal + equipmentRentalValue - discount + taxes
+  const total = subtotal - discount + taxes
 
   const addItem = () => setItems(prev => [...prev, { id: Date.now().toString(), quantity: 1, description: '', unit_price: 0 }])
   const removeItem = (id: string) => setItems(prev => prev.filter(i => i.id !== id))
@@ -259,6 +264,7 @@ export default function NovoChamadoPage() {
         date: callDate,
         client_id: finalClientId || null,
         contact_name: contactName || null,
+        contact_phone: contactPhone || null,
         origin,
         status: callStatus,
         notes: callNotes || null,
@@ -288,6 +294,7 @@ export default function NovoChamadoPage() {
         if (isApproved) {
           Object.assign(orderData, {
             team_id: teamId || null,
+            auxiliary_id: auxiliaryId || null,
             driver: driver || null,
             nf_number: nfNumber || null,
             vehicle: vehicle || null,
@@ -309,6 +316,7 @@ export default function NovoChamadoPage() {
             outsource_meal_cost: mealCost,
             outsource_truck_cost: truckCost,
             outsource_other_cost: otherCost,
+            other_service_value: otherServiceValue,
             own_material_cost: ownMaterialCost,
             own_fuel_cost: ownFuelCost,
             own_other_cost: ownOtherCost,
@@ -357,15 +365,11 @@ export default function NovoChamadoPage() {
               <p className="text-emerald-700 text-sm mt-0.5">{isScheduled ? 'OS de agendamento criada com sucesso.' : 'Ordem de serviço aprovada criada.'}</p>
             </div>
             <div className="flex gap-2">
-              <Link href={`/dashboard/chamados/${savedCallId}/imprimir`} target="_blank"
-                className="flex items-center gap-2 bg-white border border-emerald-300 text-emerald-700 text-sm font-semibold px-3 py-2 rounded-lg hover:bg-emerald-50 transition">
-                Ver OS
-              </Link>
-              <button onClick={() => savedOsNumber && handleShare(savedOsNumber)}
+              <Link href={`/os/${savedCallId}`} target="_blank"
                 className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-3 py-2 rounded-lg transition">
                 <Share2 className="w-4 h-4" />
-                Compartilhar OS
-              </button>
+                Ver / Compartilhar OS
+              </Link>
             </div>
           </div>
         )}
@@ -496,14 +500,22 @@ export default function NovoChamadoPage() {
         </div>
 
         {/* Nome do contato */}
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5">
-            Nome do Contato *
-            <span className="text-slate-400 font-normal ml-1">(quem ligou)</span>
-          </label>
-          <input type="text" value={contactName} onChange={e => setContactName(e.target.value)}
-            placeholder="Ex: João Silva"
-            className={iCls} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              Nome do Contato *
+              <span className="text-slate-400 font-normal ml-1">(quem ligou)</span>
+            </label>
+            <input type="text" value={contactName} onChange={e => setContactName(e.target.value)}
+              placeholder="Ex: João Silva"
+              className={iCls} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Telefone</label>
+            <input type="tel" value={contactPhone} onChange={e => setContactPhone(e.target.value)}
+              placeholder="(51) 99999-9999"
+              className={iCls} />
+          </div>
         </div>
 
         {/* Cliente cadastrado */}
@@ -643,83 +655,8 @@ export default function NovoChamadoPage() {
               ))}
             </div>
 
-            {/* Itens adicionais manuais */}
-            {selectedServiceTypes.length > 0 && (
-              <div className="border-t border-slate-100 pt-4">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Itens Adicionais (opcional)</p>
-                <div className="space-y-2">
-                  {items.filter(i => !selectedServiceTypes.includes(i.id)).map(item => (
-                    <div key={item.id} className="grid grid-cols-12 gap-2 items-center">
-                      <div className="col-span-2">
-                        <input type="number" min="0.01" step="0.01" value={item.quantity} onChange={e => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                          className="w-full px-2 py-2 border border-orange-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-orange-400 bg-white" />
-                      </div>
-                      <div className="col-span-6">
-                        <input type="text" value={item.description} placeholder="Descrição" onChange={e => updateItem(item.id, 'description', e.target.value)}
-                          className="w-full px-2 py-2 border border-orange-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-orange-400 bg-white" />
-                      </div>
-                      <div className="col-span-2">
-                        <input type="number" min="0" step="0.01" value={item.unit_price} onChange={e => updateItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)}
-                          className="w-full px-2 py-2 border border-orange-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-orange-400 bg-white" />
-                      </div>
-                      <div className="col-span-1 text-xs text-slate-600 font-medium text-center">{(item.quantity * item.unit_price).toFixed(2)}</div>
-                      <div className="col-span-1 flex justify-center">
-                        <button type="button" onClick={() => removeItem(item.id)} className="text-red-400 hover:text-red-600"><Trash2 className="w-3.5 h-3.5" /></button>
-                      </div>
-                    </div>
-                  ))}
-                  <button type="button" onClick={addItem} className="flex items-center gap-1.5 text-orange-500 text-sm font-medium mt-1">
-                    <Plus className="w-4 h-4" /> Adicionar item extra
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {selectedServiceTypes.length === 0 && (
-              <div className="border-t border-slate-100 pt-4">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Itens do Serviço</p>
-                <div className="space-y-2">
-                  {items.map(item => (
-                    <div key={item.id} className="grid grid-cols-12 gap-2 items-center">
-                      <div className="col-span-2">
-                        <input type="number" min="0.01" step="0.01" value={item.quantity} onChange={e => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                          className="w-full px-2 py-2 border border-orange-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
-                      </div>
-                      <div className="col-span-6">
-                        <input type="text" value={item.description} placeholder="Descrição" onChange={e => updateItem(item.id, 'description', e.target.value)}
-                          className="w-full px-2 py-2 border border-orange-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
-                      </div>
-                      <div className="col-span-2">
-                        <input type="number" min="0" step="0.01" value={item.unit_price} onChange={e => updateItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)}
-                          className="w-full px-2 py-2 border border-orange-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
-                      </div>
-                      <div className="col-span-1 text-sm text-slate-700 font-medium text-center">{(item.quantity * item.unit_price).toFixed(2)}</div>
-                      <div className="col-span-1 flex justify-center">
-                        <button type="button" onClick={() => removeItem(item.id)} className="text-red-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
-                      </div>
-                    </div>
-                  ))}
-                  <button type="button" onClick={addItem} className="flex items-center gap-1.5 text-orange-500 text-sm font-medium mt-2">
-                    <Plus className="w-4 h-4" /> Adicionar item
-                  </button>
-                </div>
-              </div>
-            )}
-
             {/* Totais */}
             <div className="border-t border-slate-100 pt-4 space-y-2">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Locação Equip. e M.O. (%)</label>
-                  <input type="number" min="0" value={equipmentRentalPct} onChange={e => setEquipmentRentalPct(Number(e.target.value))}
-                    className={iCls} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor (R$)</label>
-                  <input type="number" min="0" step="0.01" value={equipmentRentalValue} onChange={e => setEquipmentRentalValue(Number(e.target.value))}
-                    className={iCls} />
-                </div>
-              </div>
               <div className="flex justify-between text-sm items-center">
                 <span className="text-slate-600">Descontos (R$)</span>
                 <input type="number" min="0" step="0.01" value={discount} onChange={e => setDiscount(Number(e.target.value))}
@@ -746,6 +683,13 @@ export default function NovoChamadoPage() {
                 <select value={teamId} onChange={e => setTeamId(e.target.value)} className={sCls}>
                   <option value="">Selecione...</option>
                   {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Auxiliar</label>
+                <select value={auxiliaryId} onChange={e => setAuxiliaryId(e.target.value)} className={sCls}>
+                  <option value="">— Nenhum —</option>
+                  {auxiliaries.map(a => <option key={a.id} value={a.id}>{a.name} ({a.percentage}%)</option>)}
                 </select>
               </div>
               <div>
@@ -836,6 +780,18 @@ export default function NovoChamadoPage() {
                 )}
               </div>
             )}
+            {/* Outro serviço contratado */}
+            <div className="border-t border-slate-100 pt-3">
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Contratou algum outro serviço? <span className="text-slate-400 font-normal">(valor pago a terceiro)</span>
+              </label>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-slate-600">R$</span>
+                <input type="number" min="0" step="0.01" value={otherServiceValue || ''} placeholder="0,00"
+                  onChange={e => setOtherServiceValue(Number(e.target.value))}
+                  className="w-40 px-3 py-2 border border-orange-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-orange-400 bg-white" />
+              </div>
+            </div>
           </div>
 
           {/* Levantamento */}

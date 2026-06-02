@@ -50,7 +50,7 @@ export default function SaidasPage() {
   const totalPendente = expenses.filter(e => e.status === 'pendente').reduce((s, e) => s + Number(e.amount), 0)
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 max-w-7xl mx-auto pb-24">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Saídas</h1>

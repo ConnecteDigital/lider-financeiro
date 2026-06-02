@@ -175,7 +175,7 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
         </div>
         <div className="flex items-center gap-2 flex-wrap pl-11">
           {so && (
-            <Link href={`/dashboard/chamados/${id}/imprimir`} target="_blank"
+            <Link href={`/os/${id}`} target="_blank"
               className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold px-3 py-2 rounded-lg transition">
               <Printer className="w-4 h-4" />
               <span className="hidden sm:inline">Imprimir OS</span>
