@@ -1,16 +1,21 @@
-﻿'use client'
+'use client'
 
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Save } from 'lucide-react'
+import { ArrowLeft, Save, Plus } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createExpense } from '@/lib/db/expenses'
 import { getSuppliers } from '@/lib/db/suppliers'
 import { getClients } from '@/lib/db/clients'
 
-const categories = [
-  'Frota', 'Pessoal', 'Marketing', 'Administrativo', 'Operacional', 'Impostos', 'Outros'
+const BASE_CATEGORIES = [
+  'Frota', 'Pessoal', 'Marketing', 'Administrativo', 'Operacional', 'Impostos',
+  'Saldo Google', 'Outros'
 ]
+
+const GOOGLE_SITES = ['Site Líder', 'Site POA', 'Ambos']
+
+const iCls = "w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
 
 export default function NovaSaidaPage() {
   const router = useRouter()
@@ -18,6 +23,10 @@ export default function NovaSaidaPage() {
   const [error, setError] = useState('')
   const [suppliers, setSuppliers] = useState<any[]>([])
   const [clients, setClients] = useState<any[]>([])
+  const [customCategories, setCustomCategories] = useState<string[]>([])
+  const [newCategory, setNewCategory] = useState('')
+  const [showNewCategory, setShowNewCategory] = useState(false)
+
   const [form, setForm] = useState({
     description: '',
     category: 'Operacional',
@@ -28,15 +37,33 @@ export default function NovaSaidaPage() {
     notes: '',
     supplier_id: '',
     client_id: '',
+    google_site: '',
   })
 
   useEffect(() => {
     Promise.all([getSuppliers(), getClients()])
       .then(([s, c]) => { setSuppliers(s); setClients(c) })
       .catch(console.error)
+    // Load custom categories from localStorage
+    try {
+      const saved = localStorage.getItem('expense_custom_categories')
+      if (saved) setCustomCategories(JSON.parse(saved))
+    } catch { /* ignore */ }
   }, [])
 
   const set = (field: string, value: string) => setForm(f => ({ ...f, [field]: value }))
+
+  const allCategories = [...BASE_CATEGORIES, ...customCategories]
+
+  function addCustomCategory() {
+    if (!newCategory.trim() || allCategories.includes(newCategory.trim())) return
+    const updated = [...customCategories, newCategory.trim()]
+    setCustomCategories(updated)
+    localStorage.setItem('expense_custom_categories', JSON.stringify(updated))
+    set('category', newCategory.trim())
+    setNewCategory('')
+    setShowNewCategory(false)
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -49,6 +76,7 @@ export default function NovaSaidaPage() {
         recurrence_day: form.type === 'fixo' && form.recurrence_day ? parseInt(form.recurrence_day) : null,
         supplier_id: form.supplier_id || null,
         client_id: form.client_id || null,
+        google_site: form.category === 'Saldo Google' ? (form.google_site || null) : null,
       })
       router.push('/dashboard/saidas')
     } catch {
@@ -59,7 +87,7 @@ export default function NovaSaidaPage() {
   }
 
   return (
-    <div className="max-w-xl mx-auto space-y-6">
+    <div className="max-w-xl mx-auto space-y-6 pb-24">
       <div className="flex items-center gap-3">
         <Link href="/dashboard/saidas" className="p-2 hover:bg-slate-100 rounded-lg transition text-slate-500">
           <ArrowLeft className="w-5 h-5" />
@@ -75,23 +103,59 @@ export default function NovaSaidaPage() {
           <label className="block text-sm font-medium text-slate-700 mb-1.5">Descrição *</label>
           <input type="text" required value={form.description} onChange={e => set('description', e.target.value)}
             placeholder="Ex: Gasolina, Parcela Caminhão..."
-            className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            className={iCls} />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Categoria</label>
-            <select value={form.category} onChange={e => set('category', e.target.value)}
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
-              {categories.map(c => <option key={c}>{c}</option>)}
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-sm font-medium text-slate-700">Categoria</label>
+              <button type="button" onClick={() => setShowNewCategory(!showNewCategory)}
+                className="text-xs text-orange-500 hover:text-orange-600 flex items-center gap-1">
+                <Plus className="w-3 h-3" /> Nova
+              </button>
+            </div>
+            {showNewCategory && (
+              <div className="flex gap-1 mb-2">
+                <input type="text" value={newCategory} onChange={e => setNewCategory(e.target.value)}
+                  placeholder="Nome da categoria"
+                  className="flex-1 px-2 py-1.5 border border-orange-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-orange-400"
+                  onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addCustomCategory())}
+                />
+                <button type="button" onClick={addCustomCategory}
+                  className="bg-orange-500 text-white px-2 py-1.5 rounded text-xs font-medium hover:bg-orange-600">
+                  OK
+                </button>
+              </div>
+            )}
+            <select value={form.category} onChange={e => set('category', e.target.value)} className={iCls}>
+              {allCategories.map(c => <option key={c}>{c}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor (R$) *</label>
             <input type="number" required min="0" step="0.01" value={form.amount} onChange={e => set('amount', e.target.value)}
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              className={iCls} />
           </div>
         </div>
+
+        {/* Google Saldo - campo de site */}
+        {form.category === 'Saldo Google' && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+            <p className="text-xs font-semibold text-blue-700">Saldo do Google Ads</p>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Qual site?</label>
+              <div className="flex flex-wrap gap-2">
+                {GOOGLE_SITES.map(s => (
+                  <button key={s} type="button" onClick={() => set('google_site', s)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${form.google_site === s ? 'bg-blue-600 text-white' : 'bg-white border border-blue-200 text-blue-700 hover:bg-blue-50'}`}>
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">Tipo</label>
@@ -111,23 +175,21 @@ export default function NovaSaidaPage() {
               {form.type === 'fixo' ? 'Data do próximo vencimento' : 'Data de vencimento'} *
             </label>
             <input type="date" required value={form.due_date} onChange={e => set('due_date', e.target.value)}
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              className={iCls} />
           </div>
           {form.type === 'fixo' && (
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Dia do vencimento mensal</label>
               <input type="number" min="1" max="31" value={form.recurrence_day} onChange={e => set('recurrence_day', e.target.value)}
                 placeholder="Ex: 10"
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                className={iCls} />
             </div>
           )}
         </div>
 
-        {/* Fornecedor */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">Fornecedor</label>
-          <select value={form.supplier_id} onChange={e => set('supplier_id', e.target.value)}
-            className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+          <select value={form.supplier_id} onChange={e => set('supplier_id', e.target.value)} className={iCls}>
             <option value="">— Nenhum —</option>
             {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
@@ -136,13 +198,11 @@ export default function NovaSaidaPage() {
           </p>
         </div>
 
-        {/* Cliente (mensalidade) */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">
             Cliente <span className="text-slate-400 font-normal">(para mensalidades recorrentes)</span>
           </label>
-          <select value={form.client_id} onChange={e => set('client_id', e.target.value)}
-            className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+          <select value={form.client_id} onChange={e => set('client_id', e.target.value)} className={iCls}>
             <option value="">— Nenhum —</option>
             {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
@@ -151,7 +211,7 @@ export default function NovaSaidaPage() {
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">Observações</label>
           <textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)}
-            className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none" />
+            className={`${iCls} resize-none`} />
         </div>
 
         {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-2.5">{error}</div>}
@@ -171,4 +231,3 @@ export default function NovaSaidaPage() {
     </div>
   )
 }
-

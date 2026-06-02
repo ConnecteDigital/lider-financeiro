@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { use } from 'react'
 import { getCall } from '@/lib/db/calls'
-import { Printer } from 'lucide-react'
+import { Printer, Share2 } from 'lucide-react'
 
 const fmt = (v: number | string) =>
   `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
@@ -17,6 +17,13 @@ const billingLabel: Record<string, string> = {
   metro_quadrado: 'Metro Quadrado',
 }
 
+const originConfig: Record<string, { name: string; headerBg: string; headerText: string; accentBg: string }> = {
+  site_lider:    { name: 'DESENTUPIDORA LÍDER',  headerBg: '#f97316', headerText: '#ffffff', accentBg: '#ffedd5' },
+  site_poa:      { name: 'POA DESENTUPIDORA',    headerBg: '#1d4ed8', headerText: '#ffffff', accentBg: '#dbeafe' },
+  indicacao:     { name: 'DESENTUPIDORA LÍDER',  headerBg: '#059669', headerText: '#ffffff', accentBg: '#d1fae5' },
+  terceirizado:  { name: 'DESENTUPIDORA LÍDER',  headerBg: '#6b7280', headerText: '#ffffff', accentBg: '#f3f4f6' },
+}
+
 export default function ImprimirOSPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const [call, setCall] = useState<any>(null)
@@ -26,6 +33,24 @@ export default function ImprimirOSPage({ params }: { params: Promise<{ id: strin
     getCall(id).then(setCall).catch(console.error).finally(() => setLoading(false))
   }, [id])
 
+  async function handleShare() {
+    if (!call || !so) return
+    const client = call.client
+    const text = `📋 OS ${so.os_number} - ${cfg.name}\n` +
+      `👤 Cliente: ${client?.name ?? call.contact_name ?? '—'}\n` +
+      `📅 Data: ${so.date ? new Date(so.date + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}\n` +
+      `📍 Endereço: ${client?.address ?? call.call_address ?? '—'}\n` +
+      `🔧 Serviço: ${call.service_category ?? '—'}\n` +
+      `💰 Total: ${fmt(so.total_value)}`
+
+    if (navigator.share) {
+      await navigator.share({ title: `OS ${so.os_number}`, text })
+    } else {
+      await navigator.clipboard.writeText(text)
+      alert('Dados da OS copiados!')
+    }
+  }
+
   if (loading) return <div className="flex items-center justify-center h-screen text-slate-500">Carregando...</div>
   if (!call) return <div className="flex items-center justify-center h-screen text-slate-500">Chamado não encontrado.</div>
 
@@ -34,6 +59,7 @@ export default function ImprimirOSPage({ params }: { params: Promise<{ id: strin
 
   const client = call.client
   const items = so.items ?? []
+  const cfg = originConfig[call.origin] ?? originConfig.site_lider
 
   const levantamento = [
     so.has_floor_plan && 'Com planta baixa',
@@ -47,43 +73,50 @@ export default function ImprimirOSPage({ params }: { params: Promise<{ id: strin
 
   return (
     <>
-      {/* Botão de impressão — some na impressão */}
-      <div className="print:hidden fixed top-4 right-4 z-50">
+      {/* Botões flutuantes — somem na impressão */}
+      <div className="print:hidden fixed bottom-4 right-4 z-50 flex flex-col gap-2">
+        <button
+          onClick={handleShare}
+          className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold px-4 py-3 rounded-xl shadow-lg transition">
+          <Share2 className="w-4 h-4" />
+          Compartilhar OS
+        </button>
         <button
           onClick={() => window.print()}
-          className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-semibold px-5 py-2.5 rounded-xl shadow-lg transition">
+          className="flex items-center gap-2 text-white font-semibold px-4 py-3 rounded-xl shadow-lg transition"
+          style={{ backgroundColor: cfg.headerBg }}>
           <Printer className="w-4 h-4" />
-          Imprimir / Salvar PDF
+          Imprimir / PDF
         </button>
       </div>
 
-      <div className="print:m-0 min-h-screen bg-white p-6 font-sans text-[13px] text-black max-w-[800px] mx-auto">
-        {/* Cabeçalho */}
-        <div className="border-2 border-black mb-0">
-          <div className="flex">
+      <div className="print:m-0 min-h-screen bg-white p-4 sm:p-6 font-sans text-[13px] text-black max-w-[800px] mx-auto">
+        {/* Cabeçalho com cor da empresa */}
+        <div className="mb-0 rounded-t-sm overflow-hidden border-2 border-black">
+          <div className="flex" style={{ backgroundColor: cfg.headerBg }}>
             {/* Logo / empresa */}
-            <div className="border-r-2 border-black p-3 flex items-center justify-center w-40 min-h-[80px]">
+            <div className="border-r-2 border-black/30 p-3 flex items-center justify-center w-40 min-h-[80px]">
               <div className="text-center">
-                <p className="font-black text-lg leading-tight">LÍDER</p>
-                <p className="text-[10px] leading-tight">Desentupidora</p>
+                <p className="font-black text-2xl leading-tight" style={{ color: cfg.headerText }}>LÍDER</p>
+                <p className="text-[10px] leading-tight" style={{ color: cfg.headerText, opacity: 0.85 }}>Desentupidora</p>
               </div>
             </div>
             {/* Dados empresa */}
-            <div className="flex-1 p-3 text-[11px] leading-snug">
-              <p className="font-bold">DESENTUPIDORA LÍDER</p>
-              <p>Atendimento 24h · Domingos e Feriados</p>
+            <div className="flex-1 p-3 text-[11px] leading-snug" style={{ color: cfg.headerText }}>
+              <p className="font-bold text-sm">{cfg.name}</p>
+              <p style={{ opacity: 0.85 }}>Atendimento 24h · Domingos e Feriados</p>
             </div>
             {/* OS número */}
-            <div className="border-l-2 border-black p-3 flex flex-col items-center justify-center w-36">
-              <p className="text-[10px] font-bold uppercase tracking-wide">Ordem de Serviço</p>
-              <p className="text-3xl font-black mt-1">{so.os_number}</p>
+            <div className="border-l-2 border-black/30 p-3 flex flex-col items-center justify-center w-36" style={{ backgroundColor: 'rgba(0,0,0,0.15)' }}>
+              <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: cfg.headerText }}>Ordem de Serviço</p>
+              <p className="text-3xl font-black mt-1" style={{ color: cfg.headerText }}>{so.os_number}</p>
             </div>
           </div>
         </div>
 
         {/* Dados do cliente */}
         <div className="border-x-2 border-b-2 border-black">
-          <div className="bg-gray-200 px-3 py-1 font-bold text-center text-[11px] uppercase border-b border-black">
+          <div className="px-3 py-1 font-bold text-center text-[11px] uppercase border-b border-black" style={{ backgroundColor: cfg.accentBg }}>
             Dados do Cliente
           </div>
           <div className="grid grid-cols-3 divide-x divide-black">
@@ -128,7 +161,7 @@ export default function ImprimirOSPage({ params }: { params: Promise<{ id: strin
 
         {/* Tipo de serviço */}
         <div className="border-x-2 border-b-2 border-black">
-          <div className="bg-gray-200 px-3 py-1 font-bold text-center text-[11px] uppercase border-b border-black">
+          <div className="px-3 py-1 font-bold text-center text-[11px] uppercase border-b border-black" style={{ backgroundColor: cfg.accentBg }}>
             Dados do Serviço
           </div>
           <div className="grid grid-cols-2 divide-x divide-black">
@@ -138,13 +171,23 @@ export default function ImprimirOSPage({ params }: { params: Promise<{ id: strin
             </div>
             <div className="p-2">
               <p className="text-[10px] font-bold uppercase text-gray-500">Data</p>
-              <p>{so.date ? new Date(so.date + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</p>
+              <p>{so.date ? new Date(so.date + 'T12:00:00').toLocaleDateString('pt-BR') : call.scheduled_date ? new Date(call.scheduled_date + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</p>
             </div>
           </div>
-          {call.call_address && (
-            <div className="p-2 border-t border-black">
-              <p className="text-[10px] font-bold uppercase text-gray-500">Endereço do Serviço</p>
-              <p>{call.call_address}</p>
+          {(call.call_address || call.scheduled_time) && (
+            <div className="grid grid-cols-2 divide-x divide-black border-t border-black">
+              {call.call_address && (
+                <div className="p-2 col-span-1">
+                  <p className="text-[10px] font-bold uppercase text-gray-500">Endereço do Serviço</p>
+                  <p>{call.call_address}</p>
+                </div>
+              )}
+              {call.scheduled_time && (
+                <div className="p-2">
+                  <p className="text-[10px] font-bold uppercase text-gray-500">Horário</p>
+                  <p className="font-bold">{String(call.scheduled_time).slice(0,5)}</p>
+                </div>
+              )}
             </div>
           )}
           {call.notes && (
@@ -158,7 +201,7 @@ export default function ImprimirOSPage({ params }: { params: Promise<{ id: strin
         {/* Levantamento */}
         {levantamento.length > 0 && (
           <div className="border-x-2 border-b-2 border-black">
-            <div className="bg-gray-200 px-3 py-1 font-bold text-center text-[11px] uppercase border-b border-black">
+            <div className="px-3 py-1 font-bold text-center text-[11px] uppercase border-b border-black" style={{ backgroundColor: cfg.accentBg }}>
               Levantamento
             </div>
             <div className="p-2 flex flex-wrap gap-x-6 gap-y-1">
@@ -180,7 +223,7 @@ export default function ImprimirOSPage({ params }: { params: Promise<{ id: strin
 
         {/* Itens do serviço */}
         <div className="border-x-2 border-b-2 border-black">
-          <div className="bg-gray-200 px-3 py-1 font-bold text-center text-[11px] uppercase border-b border-black">
+          <div className="px-3 py-1 font-bold text-center text-[11px] uppercase border-b border-black" style={{ backgroundColor: cfg.accentBg }}>
             Serviços / Peças
           </div>
           <table className="w-full text-[12px]">
@@ -203,7 +246,6 @@ export default function ImprimirOSPage({ params }: { params: Promise<{ id: strin
               )) : (
                 <tr><td colSpan={4} className="p-2 text-center text-gray-400">Nenhum item</td></tr>
               )}
-              {/* Linhas em branco para preenchimento */}
               {Array.from({ length: Math.max(0, 3 - items.length) }).map((_, i) => (
                 <tr key={`empty-${i}`} className="border-b border-gray-200">
                   <td className="p-2 border-r border-black">&nbsp;</td>
@@ -252,7 +294,7 @@ export default function ImprimirOSPage({ params }: { params: Promise<{ id: strin
                   <span>{fmt(so.taxes)}</span>
                 </div>
               )}
-              <div className="flex justify-between px-3 py-2 bg-gray-100">
+              <div className="flex justify-between px-3 py-2" style={{ backgroundColor: cfg.accentBg }}>
                 <span className="font-bold text-[14px]">TOTAL</span>
                 <span className="font-bold text-[14px]">{fmt(so.total_value)}</span>
               </div>
@@ -312,7 +354,7 @@ export default function ImprimirOSPage({ params }: { params: Promise<{ id: strin
 
         {/* Rodapé */}
         <div className="text-center text-[10px] text-gray-400 mt-2">
-          Desentupidora Líder · Atendimento 24 horas, inclusive domingos e feriados
+          {cfg.name} · Atendimento 24 horas, inclusive domingos e feriados
         </div>
       </div>
 

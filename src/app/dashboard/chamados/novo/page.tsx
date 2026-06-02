@@ -1,19 +1,52 @@
-﻿'use client'
+'use client'
 
-import { useState, useEffect } from 'react'
-import { ArrowLeft, Plus, Trash2, Save, Loader2 } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { ArrowLeft, Plus, Trash2, Save, Loader2, Share2, Paperclip, Upload, FileText, Download, CheckSquare } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createCall } from '@/lib/db/calls'
 import { createServiceOrder } from '@/lib/db/service-orders'
 import { getClients, createClient_ } from '@/lib/db/clients'
 import { getTeams } from '@/lib/db/teams'
-import { getServiceTypes } from '@/lib/db/service-types'
+import { createClient as createSupabaseClient } from '@/lib/supabase/client'
 
-type ServiceType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
+type ServiceExecType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
 type PaymentStatus = 'pago' | 'pago_parcial' | 'pendente'
 type BillingSystem = 'metro_linear' | 'metro_cubico' | 'litros' | 'carga' | 'valor_fechado' | 'metro_quadrado'
 interface Item { id: string; quantity: number; description: string; unit_price: number }
+
+const SERVICE_TYPES_OPTIONS = [
+  { id: 'desentupimento', label: 'Desentupimento (ralo, vaso, esgoto, cano, pia, rede)' },
+  { id: 'desentupidora_ralo', label: 'Desentupidora de Ralo' },
+  { id: 'limpa_fossa', label: 'Limpa Fossa' },
+  { id: 'hidrojateamento', label: 'Hidrojateamento' },
+  { id: 'limpeza_caixa_gordura', label: 'Limpeza de Caixa de Gordura' },
+  { id: 'outros', label: 'Outros' },
+]
+
+const BILLING_FOR_TYPE: Record<string, { label: string; value: BillingSystem }[]> = {
+  desentupimento:       [{ label: 'Metro Linear', value: 'metro_linear' }, { label: 'Valor Fechado', value: 'valor_fechado' }, { label: 'Metro Cúbico', value: 'metro_cubico' }],
+  desentupidora_ralo:   [{ label: 'Metro Linear', value: 'metro_linear' }, { label: 'Valor Fechado', value: 'valor_fechado' }],
+  limpa_fossa:          [{ label: 'Litros', value: 'litros' }, { label: 'Carga', value: 'carga' }, { label: 'Valor Fechado', value: 'valor_fechado' }],
+  hidrojateamento:      [{ label: 'Metro Quadrado', value: 'metro_quadrado' }, { label: 'Valor Fechado', value: 'valor_fechado' }],
+  limpeza_caixa_gordura:[{ label: 'Valor Fechado', value: 'valor_fechado' }, { label: 'Metro Linear', value: 'metro_linear' }],
+  outros:               [{ label: 'Valor Fechado', value: 'valor_fechado' }, { label: 'Metro Linear', value: 'metro_linear' }, { label: 'Litros', value: 'litros' }],
+}
+
+interface ServiceCalc {
+  typeId: string
+  billing: BillingSystem | ''
+  quantity: number
+  unitPrice: number
+}
+
+function localToday() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+}
+
+const iCls = "w-full px-3 py-2.5 border border-orange-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white"
+const sCls = "w-full px-3 py-2.5 border border-orange-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white"
 
 export default function NovoChamadoPage() {
   const router = useRouter()
@@ -21,25 +54,35 @@ export default function NovoChamadoPage() {
   const [error, setError] = useState('')
   const [clients, setClients] = useState<any[]>([])
   const [teams, setTeams] = useState<any[]>([])
-  const [serviceTypes, setServiceTypes] = useState<any[]>([])
+  const [savedCallId, setSavedCallId] = useState<string | null>(null)
+  const [savedOsNumber, setSavedOsNumber] = useState<string | null>(null)
+  const [attachments, setAttachments] = useState<any[]>([])
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Chamado básico
-  const [callDate, setCallDate] = useState(new Date().toISOString().split('T')[0])
+  const [callDate, setCallDate] = useState(localToday())
   const [origin, setOrigin] = useState('site_lider')
   const [callStatus, setCallStatus] = useState('agendado')
   const [callNotes, setCallNotes] = useState('')
   const [clientId, setClientId] = useState('')
   const [contactName, setContactName] = useState('')
-  const [serviceCategory, setServiceCategory] = useState('')
-  // Campos de agendamento
+
+  // Agendamento
+  const [scheduledDate, setScheduledDate] = useState(localToday())
   const [scheduledTime, setScheduledTime] = useState('')
   const [callAddress, setCallAddress] = useState('')
+
+  // Serviços selecionados (checklist multi-select)
+  const [selectedServiceTypes, setSelectedServiceTypes] = useState<string[]>([])
+  const [serviceCalcs, setServiceCalcs] = useState<Record<string, ServiceCalc>>({})
+  const [serviceCategory, setServiceCategory] = useState('') // fallback text
 
   const isApproved = callStatus === 'aprovado'
   const isScheduled = callStatus === 'agendado'
 
   // OS
-  const [serviceType, setServiceType] = useState<ServiceType>('proprio')
+  const [serviceExecType, setServiceExecType] = useState<ServiceExecType>('proprio')
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('pendente')
   const [billingSystem, setBillingSystem] = useState<BillingSystem | ''>('')
   const [items, setItems] = useState<Item[]>([{ id: '1', quantity: 1, description: '', unit_price: 0 }])
@@ -65,24 +108,127 @@ export default function NovoChamadoPage() {
   const [remainingDueDate, setRemainingDueDate] = useState('')
   const [conditions, setConditions] = useState('')
   const [observations, setObservations] = useState('')
+  // Custos terceirizado
   const [fuelCost, setFuelCost] = useState(0)
   const [mealCost, setMealCost] = useState(0)
   const [truckCost, setTruckCost] = useState(0)
   const [otherCost, setOtherCost] = useState(0)
+  // Custos próprio
+  const [ownMaterialCost, setOwnMaterialCost] = useState(0)
+  const [ownFuelCost, setOwnFuelCost] = useState(0)
+  const [ownOtherCost, setOwnOtherCost] = useState(0)
 
   useEffect(() => {
-    Promise.all([getClients(), getTeams(), getServiceTypes()])
-      .then(([c, t, st]) => { setClients(c); setTeams(t); setServiceTypes(st) })
+    Promise.all([getClients(), getTeams()])
+      .then(([c, t]) => { setClients(c); setTeams(t) })
       .catch(console.error)
   }, [])
 
-  const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price, 0)
+  // Sync service calcs when service types change
+  function toggleServiceType(typeId: string) {
+    setSelectedServiceTypes(prev => {
+      if (prev.includes(typeId)) return prev.filter(x => x !== typeId)
+      return [...prev, typeId]
+    })
+    if (!serviceCalcs[typeId]) {
+      const defaultBilling = BILLING_FOR_TYPE[typeId]?.[0]?.value ?? ''
+      setServiceCalcs(prev => ({ ...prev, [typeId]: { typeId, billing: defaultBilling, quantity: 1, unitPrice: 0 } }))
+    }
+  }
+
+  function updateCalc(typeId: string, field: keyof ServiceCalc, value: any) {
+    setServiceCalcs(prev => ({ ...prev, [typeId]: { ...prev[typeId], [field]: value } }))
+  }
+
+  // Auto-generate items from service calcs
+  function buildItemsFromCalcs(): Item[] {
+    const generated: Item[] = []
+    for (const typeId of selectedServiceTypes) {
+      const calc = serviceCalcs[typeId]
+      if (!calc || calc.unitPrice === 0) continue
+      const typeName = SERVICE_TYPES_OPTIONS.find(t => t.id === typeId)?.label ?? typeId
+      const billingLabel = calc.billing ? BILLING_FOR_TYPE[typeId]?.find(b => b.value === calc.billing)?.label ?? calc.billing : ''
+      generated.push({
+        id: typeId,
+        quantity: calc.quantity,
+        description: `${typeName}${billingLabel ? ` - ${billingLabel}` : ''}`,
+        unit_price: calc.unitPrice,
+      })
+    }
+    // Include manual items that have description
+    const manualItems = items.filter(i => i.description.trim() && !selectedServiceTypes.includes(i.id))
+    return [...generated, ...manualItems]
+  }
+
+  const allItems = isApproved ? buildItemsFromCalcs() : []
+  const subtotal = allItems.reduce((s, i) => s + i.quantity * i.unit_price, 0)
   const total = subtotal + equipmentRentalValue - discount + taxes
 
   const addItem = () => setItems(prev => [...prev, { id: Date.now().toString(), quantity: 1, description: '', unit_price: 0 }])
   const removeItem = (id: string) => setItems(prev => prev.filter(i => i.id !== id))
   const updateItem = (id: string, field: keyof Item, value: string | number) =>
     setItems(prev => prev.map(i => i.id === id ? { ...i, [field]: value } : i))
+
+  async function loadAttachments(callId: string) {
+    try {
+      const supabase = createSupabaseClient()
+      const { data } = await supabase.storage.from('chamados-anexos').list(callId, { sortBy: { column: 'created_at', order: 'desc' } })
+      setAttachments(data ?? [])
+    } catch { /* bucket pode não existir ainda */ }
+  }
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !savedCallId) return
+    setUploading(true)
+    try {
+      const supabase = createSupabaseClient()
+      const path = `${savedCallId}/${Date.now()}_${file.name}`
+      const { error } = await supabase.storage.from('chamados-anexos').upload(path, file)
+      if (error) throw error
+      await loadAttachments(savedCallId)
+    } catch (err: any) {
+      alert('Erro ao fazer upload: ' + (err.message ?? 'Tente novamente'))
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  async function handleDeleteAttachment(name: string) {
+    if (!savedCallId || !confirm(`Remover o arquivo "${name}"?`)) return
+    try {
+      const supabase = createSupabaseClient()
+      await supabase.storage.from('chamados-anexos').remove([`${savedCallId}/${name}`])
+      await loadAttachments(savedCallId)
+    } catch { alert('Erro ao remover arquivo') }
+  }
+
+  async function getDownloadUrl(name: string) {
+    if (!savedCallId) return
+    const supabase = createSupabaseClient()
+    const { data } = supabase.storage.from('chamados-anexos').getPublicUrl(`${savedCallId}/${name}`)
+    window.open(data.publicUrl, '_blank')
+  }
+
+  async function handleShare(osNumber: string) {
+    const callData = {
+      nome: contactName || clients.find(c => c.id === clientId)?.name || 'Cliente',
+      os: osNumber,
+      data: new Date(scheduledDate + 'T12:00:00').toLocaleDateString('pt-BR'),
+      horario: scheduledTime ? scheduledTime.slice(0, 5) : '—',
+      endereco: callAddress || '—',
+      servico: serviceCategory || selectedServiceTypes.map(id => SERVICE_TYPES_OPTIONS.find(t => t.id === id)?.label).filter(Boolean).join(', ') || '—',
+    }
+    const text = `📋 OS ${callData.os} - Desentupidora Líder\n👤 Cliente: ${callData.nome}\n📅 Data: ${callData.data}\n🕐 Horário: ${callData.horario}\n📍 Endereço: ${callData.endereco}\n🔧 Serviço: ${callData.servico}`
+
+    if (navigator.share) {
+      await navigator.share({ title: `OS ${callData.os}`, text })
+    } else {
+      await navigator.clipboard.writeText(text)
+      alert('Dados da OS copiados!')
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -93,12 +239,15 @@ export default function NovoChamadoPage() {
     setSaving(true)
     setError('')
     try {
-      // Auto-criar cliente se não existe cadastrado
       let finalClientId = clientId
       if (!clientId && contactName.trim()) {
         const newClient = await createClient_({ name: contactName.trim() })
         finalClientId = newClient.id
       }
+
+      const serviceCategoryFinal = selectedServiceTypes.length > 0
+        ? selectedServiceTypes.map(id => SERVICE_TYPES_OPTIONS.find(t => t.id === id)?.label).filter(Boolean).join(', ')
+        : serviceCategory || null
 
       const call = await createCall({
         date: callDate,
@@ -107,63 +256,177 @@ export default function NovoChamadoPage() {
         origin,
         status: callStatus,
         notes: callNotes || null,
-        service_category: serviceCategory || null,
+        service_category: serviceCategoryFinal,
         scheduled_time: scheduledTime || null,
+        scheduled_date: isScheduled ? scheduledDate || callDate : null,
         call_address: callAddress || null,
       })
 
-      if (isApproved) {
-        const orderData = {
+      // Gerar OS para agendado também (OS de agendamento)
+      if (isScheduled || isApproved) {
+        const finalItems = isApproved
+          ? allItems.filter(i => i.description.trim()).map(i => ({ quantity: i.quantity, description: i.description, unit_price: i.unit_price }))
+          : []
+
+        const orderData: Record<string, any> = {
           call_id: call.id,
-          date: callDate,
+          date: isApproved ? callDate : (scheduledDate || callDate),
           client_id: finalClientId || null,
-          team_id: teamId || null,
-          driver: driver || null,
-          nf_number: nfNumber || null,
-          vehicle: vehicle || null,
-          due_date: dueDate || null,
-          service_type: serviceType,
+          service_type: isApproved ? serviceExecType : 'proprio',
           billing_system: billingSystem || null,
-          has_floor_plan: hasFloorPlan,
-          has_no_floor_plan: hasNoFloorPlan,
-          has_no_knowledge: hasNoKnowledge,
-          has_hydraulic_plan: hasHydraulicPlan,
-          has_no_hydraulic_plan: hasNoHydraulicPlan,
-          has_guarantee: hasGuarantee,
-          has_no_guarantee: hasNoGuarantee,
-          equipment_rental_pct: equipmentRentalPct,
-          equipment_rental_value: equipmentRentalValue,
-          subtotal,
-          discount,
-          taxes,
-          total_value: total,
-          outsource_fuel_cost: fuelCost,
-          outsource_meal_cost: mealCost,
-          outsource_truck_cost: truckCost,
-          outsource_other_cost: otherCost,
-          payment_method: paymentMethod || null,
-          payment_status: paymentStatus,
-          amount_paid: amountPaid,
-          remaining_amount: remainingAmount,
-          remaining_due_date: remainingDueDate || null,
-          conditions: conditions || null,
-          observations: observations || null,
+          payment_status: isApproved ? paymentStatus : 'pendente',
+          subtotal: isApproved ? subtotal : 0,
+          total_value: isApproved ? total : 0,
         }
-        const validItems = items.filter(i => i.description.trim()).map(i => ({ quantity: i.quantity, description: i.description, unit_price: i.unit_price }))
-        await createServiceOrder(orderData, validItems)
+
+        if (isApproved) {
+          Object.assign(orderData, {
+            team_id: teamId || null,
+            driver: driver || null,
+            nf_number: nfNumber || null,
+            vehicle: vehicle || null,
+            due_date: dueDate || null,
+            has_floor_plan: hasFloorPlan,
+            has_no_floor_plan: hasNoFloorPlan,
+            has_no_knowledge: hasNoKnowledge,
+            has_hydraulic_plan: hasHydraulicPlan,
+            has_no_hydraulic_plan: hasNoHydraulicPlan,
+            has_guarantee: hasGuarantee,
+            has_no_guarantee: hasNoGuarantee,
+            equipment_rental_pct: equipmentRentalPct,
+            equipment_rental_value: equipmentRentalValue,
+            discount,
+            taxes,
+            outsource_fuel_cost: fuelCost,
+            outsource_meal_cost: mealCost,
+            outsource_truck_cost: truckCost,
+            outsource_other_cost: otherCost,
+            own_material_cost: ownMaterialCost,
+            own_fuel_cost: ownFuelCost,
+            own_other_cost: ownOtherCost,
+            payment_method: paymentMethod || null,
+            amount_paid: amountPaid,
+            remaining_amount: remainingAmount,
+            remaining_due_date: remainingDueDate || null,
+            conditions: conditions || null,
+            observations: observations || null,
+          })
+        }
+
+        const so = await createServiceOrder(orderData, finalItems)
+        setSavedOsNumber(so.os_number)
       }
 
-      router.push('/dashboard/chamados')
+      setSavedCallId(call.id)
+      await loadAttachments(call.id)
     } catch (err: any) {
       console.error(err)
       setError('Erro ao salvar chamado. Tente novamente.')
+      setSaving(false)
     } finally {
       setSaving(false)
     }
   }
 
+  // After save: show success with attachments
+  if (savedCallId) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-6 pb-24">
+        <div className="flex items-center gap-3">
+          <Link href="/dashboard/chamados" className="p-2 hover:bg-slate-100 rounded-lg transition text-slate-500">
+            <ArrowLeft className="w-5 h-5" />
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800">Chamado Salvo!</h1>
+            <p className="text-slate-500 text-sm">Adicione documentos ou vá para o chamado</p>
+          </div>
+        </div>
+
+        {savedOsNumber && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <p className="font-semibold text-emerald-800">OS gerada: {savedOsNumber}</p>
+              <p className="text-emerald-700 text-sm mt-0.5">{isScheduled ? 'OS de agendamento criada com sucesso.' : 'Ordem de serviço aprovada criada.'}</p>
+            </div>
+            <div className="flex gap-2">
+              <Link href={`/dashboard/chamados/${savedCallId}/imprimir`} target="_blank"
+                className="flex items-center gap-2 bg-white border border-emerald-300 text-emerald-700 text-sm font-semibold px-3 py-2 rounded-lg hover:bg-emerald-50 transition">
+                Ver OS
+              </Link>
+              <button onClick={() => savedOsNumber && handleShare(savedOsNumber)}
+                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-3 py-2 rounded-lg transition">
+                <Share2 className="w-4 h-4" />
+                Compartilhar OS
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Anexos */}
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-slate-800 flex items-center gap-2">
+              <Paperclip className="w-4 h-4 text-orange-500" />
+              Documentos Anexados
+            </h2>
+            <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
+              className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white text-xs font-semibold px-3 py-2 rounded-lg transition">
+              <Upload className="w-3.5 h-3.5" />
+              {uploading ? 'Enviando...' : 'Anexar arquivo'}
+            </button>
+            <input ref={fileInputRef} type="file" className="hidden" onChange={handleUpload}
+              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" />
+          </div>
+
+          {attachments.length === 0 ? (
+            <div className="border-2 border-dashed border-slate-200 rounded-lg p-8 text-center">
+              <Paperclip className="w-6 h-6 text-slate-300 mx-auto mb-2" />
+              <p className="text-slate-400 text-sm">Nenhum documento anexado</p>
+              <p className="text-slate-300 text-xs mt-1">Clique em "Anexar arquivo" para adicionar documentos</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {attachments.map((file: any) => {
+                const displayName = file.name.replace(/^\d+_/, '')
+                const sizeKb = file.metadata?.size ? Math.round(file.metadata.size / 1024) : null
+                return (
+                  <div key={file.name} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <FileText className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-700 truncate">{displayName}</p>
+                        {sizeKb && <p className="text-xs text-slate-400">{sizeKb} KB</p>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button onClick={() => getDownloadUrl(file.name)} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition">
+                        <Download className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => handleDeleteAttachment(file.name)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-3 justify-end">
+          <Link href="/dashboard/chamados" className="px-6 py-2.5 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition">
+            Ver todos chamados
+          </Link>
+          <Link href={`/dashboard/chamados/${savedCallId}`} className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold px-6 py-2.5 rounded-lg transition">
+            Ir para o Chamado →
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <form onSubmit={handleSubmit} className="max-w-4xl mx-auto space-y-6">
+    <form onSubmit={handleSubmit} className="max-w-4xl mx-auto space-y-6 pb-32">
       <div className="flex items-center gap-3">
         <Link href="/dashboard/chamados" className="p-2 hover:bg-slate-100 rounded-lg transition text-slate-500">
           <ArrowLeft className="w-5 h-5" />
@@ -178,21 +441,21 @@ export default function NovoChamadoPage() {
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
         <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3">Informações do Chamado</h2>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Data *</label>
-            <input type="date" required value={callDate} onChange={e => setCallDate(e.target.value)}
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Origem *</label>
-            <select value={origin} onChange={e => setOrigin(e.target.value)}
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
-              <option value="site_lider">Site Líder</option>
-              <option value="site_poa">Site POA</option>
-              <option value="indicacao">Indicação</option>
-              <option value="terceirizado">Terceirizado</option>
-            </select>
+        {/* Origem primeiro */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">Origem *</label>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { value: 'site_lider', label: 'Site Líder' },
+              { value: 'site_poa', label: 'Site POA' },
+              { value: 'indicacao', label: 'Indicação' },
+              { value: 'terceirizado', label: 'Terceirizado' },
+            ].map(s => (
+              <button key={s.value} type="button" onClick={() => setOrigin(s.value)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${origin === s.value ? 'bg-orange-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                {s.label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -203,7 +466,8 @@ export default function NovoChamadoPage() {
             {[
               { value: 'agendado', label: 'Agendado' },
               { value: 'aprovado', label: 'Aprovado' },
-              { value: 'nao_quis_visita', label: 'Nao quis visita' },
+              { value: 'nao_aprovou', label: 'Não aprovou' },
+              { value: 'nao_quis_visita', label: 'Não quis visita' },
               { value: 'cancelado', label: 'Cancelado' },
             ].map(s => (
               <button key={s.value} type="button" onClick={() => setCallStatus(s.value)}
@@ -211,6 +475,15 @@ export default function NovoChamadoPage() {
                 {s.label}
               </button>
             ))}
+          </div>
+        </div>
+
+        {/* Data do chamado */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Data do Chamado *</label>
+            <input type="date" required value={callDate} onChange={e => setCallDate(e.target.value)}
+              className={iCls} />
           </div>
         </div>
 
@@ -222,17 +495,16 @@ export default function NovoChamadoPage() {
           </label>
           <input type="text" value={contactName} onChange={e => setContactName(e.target.value)}
             placeholder="Ex: João Silva"
-            className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            className={iCls} />
         </div>
 
         {/* Cliente cadastrado */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">
             Cliente cadastrado
-            <span className="text-slate-400 font-normal ml-1">(opcional — vincule se já existe no sistema)</span>
+            <span className="text-slate-400 font-normal ml-1">(opcional)</span>
           </label>
-          <select value={clientId} onChange={e => setClientId(e.target.value)}
-            className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+          <select value={clientId} onChange={e => setClientId(e.target.value)} className={sCls}>
             <option value="">— Não vincular —</option>
             {clients.map(c => <option key={c.id} value={c.id}>{c.name}{c.city ? ` - ${c.city}` : ''}</option>)}
           </select>
@@ -240,27 +512,31 @@ export default function NovoChamadoPage() {
 
         {/* Campos de agendamento */}
         {isScheduled && (
-          <div className="border border-orange-100 bg-orange-50/50 rounded-lg p-4 space-y-3">
-            <p className="text-sm font-semibold text-orange-600">Detalhes do Agendamento</p>
+          <div className="border border-orange-200 bg-orange-50/60 rounded-lg p-4 space-y-3">
+            <p className="text-sm font-semibold text-orange-600">📅 Detalhes do Agendamento</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Horário Agendado</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Data do Serviço</label>
+                <input type="date" value={scheduledDate} onChange={e => setScheduledDate(e.target.value)}
+                  className={iCls} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Horário</label>
                 <input type="time" value={scheduledTime} onChange={e => setScheduledTime(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
+                  className={iCls} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Tipo de Serviço</label>
-                <select value={serviceCategory} onChange={e => setServiceCategory(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white">
-                  <option value="">Selecionar tipo de servico</option>
-                  {serviceTypes.map(st => <option key={st.id} value={st.name}>{st.name}</option>)}
+                <select value={serviceCategory} onChange={e => setServiceCategory(e.target.value)} className={sCls}>
+                  <option value="">Selecionar tipo</option>
+                  {SERVICE_TYPES_OPTIONS.map(st => <option key={st.id} value={st.label}>{st.label}</option>)}
                 </select>
               </div>
-              <div className="sm:col-span-2">
+              <div className="sm:col-span-1">
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Endereço do Serviço</label>
                 <input type="text" value={callAddress} onChange={e => setCallAddress(e.target.value)}
                   placeholder="Rua, número, bairro, cidade"
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
+                  className={iCls} />
               </div>
             </div>
           </div>
@@ -270,49 +546,218 @@ export default function NovoChamadoPage() {
           <label className="block text-sm font-medium text-slate-700 mb-1.5">Observações</label>
           <textarea rows={2} value={callNotes} onChange={e => setCallNotes(e.target.value)}
             placeholder="Anotações sobre o chamado..."
-            className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none" />
+            className={`${iCls} resize-none`} />
         </div>
       </div>
 
       {/* OS — só quando aprovado */}
       {isApproved && (
         <>
+          {/* Checklist de serviços */}
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
+            <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3 flex items-center gap-2">
+              <CheckSquare className="w-4 h-4 text-orange-500" />
+              Tipo(s) de Serviço Realizado
+            </h2>
+            <div className="space-y-2">
+              {SERVICE_TYPES_OPTIONS.map(st => (
+                <div key={st.id}>
+                  <label className="flex items-start gap-3 cursor-pointer p-2 rounded-lg hover:bg-slate-50">
+                    <input
+                      type="checkbox"
+                      checked={selectedServiceTypes.includes(st.id)}
+                      onChange={() => toggleServiceType(st.id)}
+                      className="w-4 h-4 mt-0.5 text-orange-500 rounded border-orange-300"
+                    />
+                    <span className="text-sm text-slate-700">{st.label}</span>
+                  </label>
+
+                  {/* Calculadora de cobrança por tipo */}
+                  {selectedServiceTypes.includes(st.id) && serviceCalcs[st.id] && (
+                    <div className="ml-7 mt-1 mb-2 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">Cobrança</label>
+                          <select
+                            value={serviceCalcs[st.id].billing}
+                            onChange={e => updateCalc(st.id, 'billing', e.target.value)}
+                            className="w-full px-2 py-1.5 border border-orange-300 rounded text-xs bg-white focus:outline-none focus:ring-1 focus:ring-orange-400"
+                          >
+                            {BILLING_FOR_TYPE[st.id]?.map(b => (
+                              <option key={b.value} value={b.value}>{b.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">
+                            {serviceCalcs[st.id].billing === 'litros' ? 'Quantidade (L)' :
+                             serviceCalcs[st.id].billing?.includes('metro') ? 'Quantidade (m)' :
+                             'Quantidade'}
+                          </label>
+                          <input
+                            type="number" min="0" step="0.01"
+                            value={serviceCalcs[st.id].quantity}
+                            onChange={e => updateCalc(st.id, 'quantity', parseFloat(e.target.value) || 0)}
+                            className="w-full px-2 py-1.5 border border-orange-300 rounded text-xs bg-white focus:outline-none focus:ring-1 focus:ring-orange-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">
+                            {serviceCalcs[st.id].billing === 'litros' ? 'Preço/Litro (R$)' :
+                             serviceCalcs[st.id].billing?.includes('metro') ? 'Preço/Metro (R$)' :
+                             'Valor (R$)'}
+                          </label>
+                          <input
+                            type="number" min="0" step="0.01"
+                            value={serviceCalcs[st.id].unitPrice}
+                            onChange={e => updateCalc(st.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                            className="w-full px-2 py-1.5 border border-orange-300 rounded text-xs bg-white focus:outline-none focus:ring-1 focus:ring-orange-400"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">Total</label>
+                          <div className="px-2 py-1.5 bg-orange-100 rounded text-xs font-bold text-orange-700">
+                            R$ {(serviceCalcs[st.id].quantity * serviceCalcs[st.id].unitPrice).toFixed(2)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Itens adicionais manuais */}
+            {selectedServiceTypes.length > 0 && (
+              <div className="border-t border-slate-100 pt-4">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Itens Adicionais (opcional)</p>
+                <div className="space-y-2">
+                  {items.filter(i => !selectedServiceTypes.includes(i.id)).map(item => (
+                    <div key={item.id} className="grid grid-cols-12 gap-2 items-center">
+                      <div className="col-span-2">
+                        <input type="number" min="0.01" step="0.01" value={item.quantity} onChange={e => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                          className="w-full px-2 py-2 border border-orange-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-orange-400 bg-white" />
+                      </div>
+                      <div className="col-span-6">
+                        <input type="text" value={item.description} placeholder="Descrição" onChange={e => updateItem(item.id, 'description', e.target.value)}
+                          className="w-full px-2 py-2 border border-orange-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-orange-400 bg-white" />
+                      </div>
+                      <div className="col-span-2">
+                        <input type="number" min="0" step="0.01" value={item.unit_price} onChange={e => updateItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)}
+                          className="w-full px-2 py-2 border border-orange-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-orange-400 bg-white" />
+                      </div>
+                      <div className="col-span-1 text-xs text-slate-600 font-medium text-center">{(item.quantity * item.unit_price).toFixed(2)}</div>
+                      <div className="col-span-1 flex justify-center">
+                        <button type="button" onClick={() => removeItem(item.id)} className="text-red-400 hover:text-red-600"><Trash2 className="w-3.5 h-3.5" /></button>
+                      </div>
+                    </div>
+                  ))}
+                  <button type="button" onClick={addItem} className="flex items-center gap-1.5 text-orange-500 text-sm font-medium mt-1">
+                    <Plus className="w-4 h-4" /> Adicionar item extra
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {selectedServiceTypes.length === 0 && (
+              <div className="border-t border-slate-100 pt-4">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Itens do Serviço</p>
+                <div className="space-y-2">
+                  {items.map(item => (
+                    <div key={item.id} className="grid grid-cols-12 gap-2 items-center">
+                      <div className="col-span-2">
+                        <input type="number" min="0.01" step="0.01" value={item.quantity} onChange={e => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                          className="w-full px-2 py-2 border border-orange-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
+                      </div>
+                      <div className="col-span-6">
+                        <input type="text" value={item.description} placeholder="Descrição" onChange={e => updateItem(item.id, 'description', e.target.value)}
+                          className="w-full px-2 py-2 border border-orange-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
+                      </div>
+                      <div className="col-span-2">
+                        <input type="number" min="0" step="0.01" value={item.unit_price} onChange={e => updateItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)}
+                          className="w-full px-2 py-2 border border-orange-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
+                      </div>
+                      <div className="col-span-1 text-sm text-slate-700 font-medium text-center">{(item.quantity * item.unit_price).toFixed(2)}</div>
+                      <div className="col-span-1 flex justify-center">
+                        <button type="button" onClick={() => removeItem(item.id)} className="text-red-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
+                      </div>
+                    </div>
+                  ))}
+                  <button type="button" onClick={addItem} className="flex items-center gap-1.5 text-orange-500 text-sm font-medium mt-2">
+                    <Plus className="w-4 h-4" /> Adicionar item
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Totais */}
+            <div className="border-t border-slate-100 pt-4 space-y-2">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Locação Equip. e M.O. (%)</label>
+                  <input type="number" min="0" value={equipmentRentalPct} onChange={e => setEquipmentRentalPct(Number(e.target.value))}
+                    className={iCls} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor (R$)</label>
+                  <input type="number" min="0" step="0.01" value={equipmentRentalValue} onChange={e => setEquipmentRentalValue(Number(e.target.value))}
+                    className={iCls} />
+                </div>
+              </div>
+              <div className="flex justify-between text-sm items-center">
+                <span className="text-slate-600">Descontos (R$)</span>
+                <input type="number" min="0" step="0.01" value={discount} onChange={e => setDiscount(Number(e.target.value))}
+                  className="w-24 px-2 py-1 border border-orange-300 rounded text-sm text-right focus:outline-none focus:ring-1 focus:ring-orange-400 bg-white" />
+              </div>
+              <div className="flex justify-between text-sm items-center">
+                <span className="text-slate-600">Impostos (R$)</span>
+                <input type="number" min="0" step="0.01" value={taxes} onChange={e => setTaxes(Number(e.target.value))}
+                  className="w-24 px-2 py-1 border border-orange-300 rounded text-sm text-right focus:outline-none focus:ring-1 focus:ring-orange-400 bg-white" />
+              </div>
+              <div className="flex justify-between text-base font-bold border-t border-slate-100 pt-2">
+                <span className="text-slate-800">Valor Total</span>
+                <span className="text-orange-500">R$ {total.toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* OS Info */}
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
             <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3">Ordem de Serviço</h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Equipe</label>
-                <select value={teamId} onChange={e => setTeamId(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+                <select value={teamId} onChange={e => setTeamId(e.target.value)} className={sCls}>
                   <option value="">Selecione...</option>
                   {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Motorista</label>
-                <input type="text" value={driver} onChange={e => setDriver(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                <input type="text" value={driver} onChange={e => setDriver(e.target.value)} className={iCls} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">NÂº da NF</label>
-                <input type="text" value={nfNumber} onChange={e => setNfNumber(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Nº da NF</label>
+                <input type="text" value={nfNumber} onChange={e => setNfNumber(e.target.value)} className={iCls} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Veículo</label>
-                <input type="text" value={vehicle} onChange={e => setVehicle(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                <input type="text" value={vehicle} onChange={e => setVehicle(e.target.value)} className={iCls} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Vencimento</label>
-                <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={iCls} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Forma de Pagamento</label>
-                <input type="text" placeholder="Dinheiro, PIX, Cartão..." value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                <input type="text" placeholder="Dinheiro, PIX, Cartão..." value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className={iCls} />
               </div>
+              {isApproved && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Endereço do Serviço</label>
+                  <input type="text" value={callAddress} onChange={e => setCallAddress(e.target.value)} placeholder="Rua, número, bairro" className={iCls} />
+                </div>
+              )}
             </div>
           </div>
 
@@ -325,13 +770,13 @@ export default function NovoChamadoPage() {
                 { value: 'terceirizado_saida', label: 'Terceirizado (passamos)' },
                 { value: 'terceirizado_entrada', label: 'Recebido de parceiro' },
               ].map(s => (
-                <button key={s.value} type="button" onClick={() => setServiceType(s.value as ServiceType)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition ${serviceType === s.value ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                <button key={s.value} type="button" onClick={() => setServiceExecType(s.value as ServiceExecType)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition ${serviceExecType === s.value ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
                   {s.label}
                 </button>
               ))}
             </div>
-            {serviceType !== 'proprio' && (
+            {serviceExecType !== 'proprio' ? (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {[
                   { label: 'Gasolina (R$)', val: fuelCost, set: setFuelCost },
@@ -342,76 +787,32 @@ export default function NovoChamadoPage() {
                   <div key={f.label}>
                     <label className="block text-sm font-medium text-slate-700 mb-1.5">{f.label}</label>
                     <input type="number" min="0" step="0.01" value={f.val} onChange={e => f.set(Number(e.target.value))}
-                      className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                      className={iCls} />
                   </div>
                 ))}
               </div>
-            )}
-          </div>
-
-          {/* Itens */}
-          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
-            <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3">Itens do Serviço</h2>
-            <div className="space-y-2">
-              <div className="grid grid-cols-12 gap-2 text-xs font-semibold text-slate-500 uppercase px-1">
-                <div className="col-span-2">Qtd.</div><div className="col-span-6">Descrição</div>
-                <div className="col-span-2">Vlr. Unit.</div><div className="col-span-1">Total</div><div className="col-span-1"></div>
-              </div>
-              {items.map(item => (
-                <div key={item.id} className="grid grid-cols-12 gap-2 items-center">
-                  <div className="col-span-2">
-                    <input type="number" min="1" value={item.quantity} onChange={e => updateItem(item.id, 'quantity', Number(e.target.value))}
-                      className="w-full px-2 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
-                  </div>
-                  <div className="col-span-6">
-                    <input type="text" value={item.description} placeholder="Descrição" onChange={e => updateItem(item.id, 'description', e.target.value)}
-                      className="w-full px-2 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
-                  </div>
-                  <div className="col-span-2">
-                    <input type="number" min="0" step="0.01" value={item.unit_price} onChange={e => updateItem(item.id, 'unit_price', Number(e.target.value))}
-                      className="w-full px-2 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
-                  </div>
-                  <div className="col-span-1 text-sm text-slate-700 font-medium text-center">{(item.quantity * item.unit_price).toFixed(2)}</div>
-                  <div className="col-span-1 flex justify-center">
-                    <button type="button" onClick={() => removeItem(item.id)} className="text-red-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
-                  </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Material (R$)</label>
+                  <input type="number" min="0" step="0.01" value={ownMaterialCost} onChange={e => setOwnMaterialCost(Number(e.target.value))} className={iCls} />
                 </div>
-              ))}
-              <button type="button" onClick={addItem} className="flex items-center gap-1.5 text-orange-500 text-sm font-medium mt-2">
-                <Plus className="w-4 h-4" /> Adicionar item
-              </button>
-            </div>
-
-            <div className="border-t border-slate-100 pt-4 grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Locação Equip. e M.O. (%)</label>
-                <input type="number" min="0" value={equipmentRentalPct} onChange={e => setEquipmentRentalPct(Number(e.target.value))}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Combustível (R$)</label>
+                  <input type="number" min="0" step="0.01" value={ownFuelCost} onChange={e => setOwnFuelCost(Number(e.target.value))} className={iCls} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Outros Custos (R$)</label>
+                  <input type="number" min="0" step="0.01" value={ownOtherCost} onChange={e => setOwnOtherCost(Number(e.target.value))} className={iCls} />
+                </div>
+                {(ownMaterialCost + ownFuelCost + ownOtherCost) > 0 && (
+                  <div className="col-span-2 sm:col-span-3 bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex justify-between items-center">
+                    <span className="text-sm font-medium text-emerald-800">Total de Custos do Serviço:</span>
+                    <span className="text-sm font-bold text-emerald-800">R$ {(ownMaterialCost + ownFuelCost + ownOtherCost).toFixed(2)}</span>
+                  </div>
+                )}
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor (R$)</label>
-                <input type="number" min="0" step="0.01" value={equipmentRentalValue} onChange={e => setEquipmentRentalValue(Number(e.target.value))}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
-              </div>
-            </div>
-
-            <div className="border-t border-slate-100 pt-4 space-y-2">
-              <div className="flex justify-between text-sm"><span className="text-slate-600">Subtotal</span><span>R$ {subtotal.toFixed(2)}</span></div>
-              <div className="flex justify-between text-sm items-center">
-                <span className="text-slate-600">Descontos (R$)</span>
-                <input type="number" min="0" step="0.01" value={discount} onChange={e => setDiscount(Number(e.target.value))}
-                  className="w-24 px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-orange-400" />
-              </div>
-              <div className="flex justify-between text-sm items-center">
-                <span className="text-slate-600">Impostos (R$)</span>
-                <input type="number" min="0" step="0.01" value={taxes} onChange={e => setTaxes(Number(e.target.value))}
-                  className="w-24 px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-orange-400" />
-              </div>
-              <div className="flex justify-between text-base font-bold border-t border-slate-100 pt-2">
-                <span className="text-slate-800">Valor Total</span>
-                <span className="text-orange-500">R$ {total.toFixed(2)}</span>
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Levantamento */}
@@ -459,13 +860,11 @@ export default function NovoChamadoPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Condições de Pagamento</label>
-              <input type="text" value={conditions} onChange={e => setConditions(e.target.value)}
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              <input type="text" value={conditions} onChange={e => setConditions(e.target.value)} className={iCls} />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Observações da OS</label>
-              <textarea rows={2} value={observations} onChange={e => setObservations(e.target.value)}
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none" />
+              <textarea rows={2} value={observations} onChange={e => setObservations(e.target.value)} className={`${iCls} resize-none`} />
             </div>
           </div>
 
@@ -488,18 +887,15 @@ export default function NovoChamadoPage() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor Pago (R$)</label>
-                  <input type="number" min="0" step="0.01" value={amountPaid} onChange={e => setAmountPaid(Number(e.target.value))}
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                  <input type="number" min="0" step="0.01" value={amountPaid} onChange={e => setAmountPaid(Number(e.target.value))} className={iCls} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor Restante (R$)</label>
-                  <input type="number" min="0" step="0.01" value={remainingAmount} onChange={e => setRemainingAmount(Number(e.target.value))}
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                  <input type="number" min="0" step="0.01" value={remainingAmount} onChange={e => setRemainingAmount(Number(e.target.value))} className={iCls} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Data do Restante</label>
-                  <input type="date" value={remainingDueDate} onChange={e => setRemainingDueDate(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                  <input type="date" value={remainingDueDate} onChange={e => setRemainingDueDate(e.target.value)} className={iCls} />
                 </div>
               </div>
             )}
@@ -509,7 +905,7 @@ export default function NovoChamadoPage() {
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{error}</div>}
 
-      <div className="flex gap-3 justify-end pb-6">
+      <div className="flex gap-3 justify-end pb-8">
         <Link href="/dashboard/chamados"
           className="px-6 py-2.5 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition">
           Cancelar
@@ -523,4 +919,3 @@ export default function NovoChamadoPage() {
     </form>
   )
 }
-

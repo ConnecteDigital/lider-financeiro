@@ -5,13 +5,14 @@ import { Plus, Search, CheckCircle, XCircle, Clock, ChevronRight } from 'lucide-
 import Link from 'next/link'
 import { getCalls } from '@/lib/db/calls'
 
-type Status = 'todos' | 'agendado' | 'aprovado' | 'nao_quis_visita' | 'cancelado'
+type Status = 'todos' | 'agendado' | 'aprovado' | 'nao_quis_visita' | 'nao_aprovou' | 'cancelado'
 
 const statusConfig: Record<string, { label: string; color: string; icon: React.ElementType }> = {
-  agendado:        { label: 'Agendado',    color: 'bg-blue-50 text-blue-700 border-blue-200',        icon: Clock },
-  aprovado:        { label: 'Aprovado',    color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: CheckCircle },
-  nao_quis_visita: { label: 'Nao quis',   color: 'bg-zinc-100 text-zinc-600 border-zinc-200',        icon: XCircle },
-  cancelado:       { label: 'Cancelado',  color: 'bg-red-50 text-red-600 border-red-200',            icon: XCircle },
+  agendado:        { label: 'Agendado',     color: 'bg-blue-50 text-blue-700 border-blue-200',          icon: Clock },
+  aprovado:        { label: 'Aprovado',     color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: CheckCircle },
+  nao_quis_visita: { label: 'Não quis',    color: 'bg-zinc-100 text-zinc-600 border-zinc-200',          icon: XCircle },
+  nao_aprovou:     { label: 'Não aprovou', color: 'bg-orange-50 text-orange-700 border-orange-200',     icon: XCircle },
+  cancelado:       { label: 'Cancelado',   color: 'bg-red-50 text-red-600 border-red-200',              icon: XCircle },
 }
 
 const paymentConfig: Record<string, { label: string; color: string }> = {
@@ -31,7 +32,8 @@ const filters: { value: Status; label: string }[] = [
   { value: 'todos', label: 'Todos' },
   { value: 'agendado', label: 'Agendado' },
   { value: 'aprovado', label: 'Aprovado' },
-  { value: 'nao_quis_visita', label: 'Nao quis' },
+  { value: 'nao_quis_visita', label: 'Não quis' },
+  { value: 'nao_aprovou', label: 'Não aprovou' },
   { value: 'cancelado', label: 'Cancelado' },
 ]
 
@@ -79,7 +81,7 @@ export default function ChamadosPage() {
       {/* Search */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-        <input type="text" placeholder="Buscar cliente ou contato..."
+        <input type="text" placeholder="Buscar cliente, contato ou código OS..."
           value={search} onChange={e => handleSearchChange(e.target.value)}
           className="w-full pl-9 pr-4 py-2.5 bg-white border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 shadow-sm" />
       </div>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { PhoneCall, CheckCircle, DollarSign, TrendingUp, TrendingDown, AlertCircle, Clock, MapPin } from 'lucide-react'
+import { PhoneCall, CheckCircle, DollarSign, TrendingUp, TrendingDown, AlertCircle, Clock, MapPin, CalendarClock } from 'lucide-react'
 import { format, startOfMonth, endOfMonth } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { getDashboardStatsRange, getNotifications } from '@/lib/db/dashboard'
@@ -12,6 +12,7 @@ import Link from 'next/link'
 interface Stats {
   total_calls: number; approved_calls: number; gross_revenue: number
   net_revenue: number; pending_receivables: number; total_expenses: number
+  pending_expenses: number
 }
 
 type Notifications = any
@@ -42,12 +43,13 @@ export default function DashboardPage() {
   useEffect(() => { load() }, [load])
 
   const cards = stats ? [
-    { icon: PhoneCall,    label: 'Chamados',    value: String(stats.total_calls),      sub: `${stats.approved_calls} aprovados`,  color: 'text-zinc-800' },
-    { icon: CheckCircle,  label: 'Aprovacao',   value: stats.total_calls > 0 ? `${Math.round((stats.approved_calls/stats.total_calls)*100)}%` : '0%', sub: `${stats.total_calls-stats.approved_calls} nao aprov.`, color: 'text-emerald-600' },
-    { icon: DollarSign,   label: 'Rec. Bruta',  value: fmt(stats.gross_revenue),       sub: 'receita total',  color: 'text-orange-500' },
-    { icon: TrendingUp,   label: 'Rec. Liquida',value: fmt(stats.net_revenue),         sub: 'apos custos',    color: stats.net_revenue >= 0 ? 'text-emerald-600' : 'text-red-500' },
-    { icon: AlertCircle,  label: 'A Receber',   value: fmt(stats.pending_receivables), sub: 'em aberto',      color: 'text-amber-600' },
-    { icon: TrendingDown, label: 'Saidas',      value: fmt(stats.total_expenses),      sub: 'despesas',       color: 'text-red-500' },
+    { icon: PhoneCall,    label: 'Chamados',         value: String(stats.total_calls),      sub: `${stats.approved_calls} aprovados`,  color: 'text-zinc-800' },
+    { icon: CheckCircle,  label: 'Aprovação',        value: stats.total_calls > 0 ? `${Math.round((stats.approved_calls/stats.total_calls)*100)}%` : '0%', sub: `${stats.total_calls-stats.approved_calls} nao aprov.`, color: 'text-emerald-600' },
+    { icon: DollarSign,   label: 'Rec. Bruta',       value: fmt(stats.gross_revenue),       sub: 'receita total',  color: 'text-orange-500' },
+    { icon: TrendingUp,   label: 'Rec. Líquida',     value: fmt(stats.net_revenue),         sub: 'após custos',    color: stats.net_revenue >= 0 ? 'text-emerald-600' : 'text-red-500' },
+    { icon: AlertCircle,  label: 'A Receber',        value: fmt(stats.pending_receivables), sub: 'em aberto',      color: 'text-amber-600' },
+    { icon: TrendingDown, label: 'Saídas Pagas',     value: fmt(stats.total_expenses),      sub: 'despesas pagas', color: 'text-red-500' },
+    { icon: CalendarClock,label: 'Saídas Agendadas', value: fmt(stats.pending_expenses),    sub: 'a pagar',        color: 'text-amber-500' },
   ] : []
 
   return (
@@ -56,25 +58,25 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900">Dashboard</h1>
-          <p className="text-zinc-500 text-sm hidden sm:block">Visao geral financeiro e operacional</p>
+          <p className="text-zinc-500 text-sm hidden sm:block">Visão geral financeiro e operacional</p>
         </div>
         <DateRangePicker value={range} onChange={setRange} />
       </div>
 
-      {/* Stats cards - swipe horizontal on mobile */}
-      <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-3 lg:grid-cols-6 no-scrollbar">
+      {/* Stats cards - 2x2 grid on mobile showing 4 at once, scroll for rest */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
         {loading ? (
-          [...Array(6)].map((_, i) => (
-            <div key={i} className="flex-shrink-0 w-36 sm:w-auto bg-white rounded-2xl border border-zinc-100 p-4 animate-pulse h-24" />
+          [...Array(7)].map((_, i) => (
+            <div key={i} className="bg-white rounded-2xl border border-zinc-100 p-4 animate-pulse h-24" />
           ))
         ) : cards.map((card, i) => (
-          <div key={i} className="flex-shrink-0 w-36 sm:w-auto bg-white rounded-2xl border border-zinc-100 p-4 shadow-sm">
+          <div key={i} className="bg-white rounded-2xl border border-zinc-100 p-4 shadow-sm">
             <div className="flex items-center justify-between mb-1.5">
-              <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wide leading-none">{card.label}</p>
-              <card.icon className={`w-3.5 h-3.5 ${card.color}`} />
+              <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wide leading-none truncate pr-1">{card.label}</p>
+              <card.icon className={`w-3.5 h-3.5 flex-shrink-0 ${card.color}`} />
             </div>
-            <p className={`text-lg font-bold leading-tight ${card.color}`}>{card.value}</p>
-            <p className="text-xs text-zinc-400 mt-0.5">{card.sub}</p>
+            <p className={`text-base font-bold leading-tight ${card.color}`}>{card.value}</p>
+            <p className="text-xs text-zinc-400 mt-0.5 truncate">{card.sub}</p>
           </div>
         ))}
       </div>
@@ -167,14 +169,14 @@ export default function DashboardPage() {
 
       {/* Quick actions - desktop only */}
       <div className="hidden lg:block bg-white rounded-2xl border border-zinc-100 shadow-sm p-5">
-        <h3 className="font-semibold text-zinc-800 mb-4">Acoes Rapidas</h3>
+        <h3 className="font-semibold text-zinc-800 mb-4">Ações Rápidas</h3>
         <div className="flex flex-wrap gap-3">
           <Link href="/dashboard/chamados/novo" className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium px-4 py-2 rounded-xl transition">
             <PhoneCall className="w-4 h-4" /> Novo Chamado
           </Link>
           <Link href="/dashboard/clientes/novo" className="flex items-center gap-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-sm font-medium px-4 py-2 rounded-xl transition">Novo Cliente</Link>
-          <Link href="/dashboard/saidas/novo" className="flex items-center gap-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-sm font-medium px-4 py-2 rounded-xl transition">Lancar Saida</Link>
-          <Link href="/dashboard/relatorios" className="flex items-center gap-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-sm font-medium px-4 py-2 rounded-xl transition">Ver Relatorios</Link>
+          <Link href="/dashboard/saidas/novo" className="flex items-center gap-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-sm font-medium px-4 py-2 rounded-xl transition">Lançar Saída</Link>
+          <Link href="/dashboard/relatorios" className="flex items-center gap-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-sm font-medium px-4 py-2 rounded-xl transition">Ver Relatórios</Link>
         </div>
       </div>
 

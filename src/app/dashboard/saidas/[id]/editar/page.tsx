@@ -10,7 +10,7 @@ import { getSuppliers } from '@/lib/db/suppliers'
 import { getClients } from '@/lib/db/clients'
 import { createClient } from '@/lib/supabase/client'
 
-const categories = ['Frota', 'Pessoal', 'Marketing', 'Administrativo', 'Operacional', 'Impostos', 'Outros']
+const BASE_CATEGORIES = ['Frota', 'Pessoal', 'Marketing', 'Administrativo', 'Operacional', 'Impostos', 'Saldo Google', 'Outros']
 
 export default function EditarSaidaPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -100,7 +100,7 @@ export default function EditarSaidaPage({ params }: { params: Promise<{ id: stri
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Categoria</label>
             <select value={form.category} onChange={e => set('category', e.target.value)}
               className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
-              {categories.map(c => <option key={c}>{c}</option>)}
+              {BASE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
             </select>
           </div>
           <div>

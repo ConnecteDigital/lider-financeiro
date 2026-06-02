@@ -38,8 +38,10 @@ export async function getDashboardStatsRange(startDate: string, endDate: string)
     return s + outsource
   }, 0)
 
-  const total_expenses = expenses.reduce((s, e) => s + (e.amount || 0), 0)
-  const net_revenue = gross_revenue - total_costs - total_expenses
+  const paid_expenses = expenses.filter(e => e.status === 'pago').reduce((s, e) => s + (e.amount || 0), 0)
+  const pending_expenses = expenses.filter(e => e.status === 'pendente').reduce((s, e) => s + (e.amount || 0), 0)
+  const total_expenses = paid_expenses
+  const net_revenue = gross_revenue - total_costs - paid_expenses
 
   const pending_receivables = orders
     .filter(o => o.payment_status === 'pendente' || o.payment_status === 'pago_parcial')
@@ -52,6 +54,7 @@ export async function getDashboardStatsRange(startDate: string, endDate: string)
     net_revenue,
     pending_receivables,
     total_expenses,
+    pending_expenses,
   }
 }
 

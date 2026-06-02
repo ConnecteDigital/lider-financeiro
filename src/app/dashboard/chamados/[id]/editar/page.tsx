@@ -42,6 +42,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [contactName, setContactName] = useState('')
   const [serviceCategory, setServiceCategory] = useState('')
   const [scheduledTime, setScheduledTime] = useState('')
+  const [scheduledDate, setScheduledDate] = useState('')
   const [callAddress, setCallAddress] = useState('')
   const [isApproved, setIsApproved] = useState(false)
   const [isScheduled, setIsScheduled] = useState(false)
@@ -92,6 +93,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
       setContactName(call.contact_name ?? '')
       setServiceCategory(call.service_category ?? '')
       setScheduledTime(call.scheduled_time ? String(call.scheduled_time).slice(0,5) : '')
+      setScheduledDate(call.scheduled_date ?? call.date ?? '')
       setCallAddress(call.call_address ?? '')
       setIsApproved(call.status === 'aprovado')
       setIsScheduled(call.status === 'agendado')
@@ -172,6 +174,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         notes: callNotes || null,
         service_category: serviceCategory || null,
         scheduled_time: scheduledTime || null,
+        scheduled_date: scheduledDate || null,
         call_address: callAddress || null,
       })
 
@@ -260,7 +263,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   }
 
   return (
-    <form onSubmit={handleSubmit} className="max-w-4xl mx-auto space-y-6">
+    <form onSubmit={handleSubmit} className="max-w-4xl mx-auto space-y-6 pb-24">
       <div className="flex items-center gap-3">
         <Link href={`/dashboard/chamados/${id}`} className="p-2 hover:bg-slate-100 rounded-lg transition text-slate-500">
           <ArrowLeft className="w-5 h-5" />
@@ -299,7 +302,8 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
             {[
               { value: 'agendado', label: 'Agendado' },
               { value: 'aprovado', label: 'Aprovado' },
-              { value: 'nao_quis_visita', label: 'Nao quis visita' },
+              { value: 'nao_aprovou', label: 'Não aprovou' },
+              { value: 'nao_quis_visita', label: 'Não quis visita' },
               { value: 'cancelado', label: 'Cancelado' },
             ].map(s => (
               <button key={s.value} type="button" onClick={() => handleStatusChange(s.value)}
@@ -339,19 +343,24 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         </div>
 
         {isScheduled && (
-          <div className="border border-blue-100 bg-blue-50/50 rounded-lg p-4 space-y-3">
-            <p className="text-sm font-semibold text-blue-700">Detalhes do Agendamento</p>
+          <div className="border border-orange-200 bg-orange-50/50 rounded-lg p-4 space-y-3">
+            <p className="text-sm font-semibold text-orange-600">📅 Detalhes do Agendamento</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Data do Serviço</label>
+                <input type="date" value={scheduledDate} onChange={e => setScheduledDate(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-orange-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
+              </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Horário Agendado</label>
                 <input type="time" value={scheduledTime} onChange={e => setScheduledTime(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
+                  className="w-full px-3 py-2.5 border border-orange-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
               </div>
               <div className="sm:col-span-2">
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Endereço do Serviço</label>
                 <input type="text" value={callAddress} onChange={e => setCallAddress(e.target.value)}
                   placeholder="Rua, número, bairro, cidade"
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
+                  className="w-full px-3 py-2.5 border border-orange-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
               </div>
             </div>
           </div>
