@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { use } from 'react'
 import { getCall } from '@/lib/db/calls'
 import { Printer, Share2 } from 'lucide-react'
+import { createClient as createSupabaseClient } from '@/lib/supabase/client'
 
 const fmt = (v: number | string) =>
   `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
@@ -28,9 +29,23 @@ export default function OSPage({ params }: { params: Promise<{ id: string }> }) 
   const { id } = use(params)
   const [call, setCall] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [attachments, setAttachments] = useState<{ name: string; url: string; isImage: boolean }[]>([])
 
   useEffect(() => {
     getCall(id).then(setCall).catch(console.error).finally(() => setLoading(false))
+    // Load attachments from storage
+    const supabase = createSupabaseClient()
+    supabase.storage.from('chamados-anexos').list(id, { sortBy: { column: 'created_at', order: 'asc' } })
+      .then(({ data }) => {
+        if (!data) return
+        const files = data.map(f => {
+          const { data: urlData } = supabase.storage.from('chamados-anexos').getPublicUrl(`${id}/${f.name}`)
+          const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(f.name)
+          return { name: f.name.replace(/^\d+_/, ''), url: urlData.publicUrl, isImage }
+        })
+        setAttachments(files)
+      })
+      .catch(() => {})
   }, [id])
 
   function handleShare() {
@@ -321,6 +336,30 @@ export default function OSPage({ params }: { params: Promise<{ id: string }> }) 
           </div>
         </div>
 
+        {/* Documentos anexados */}
+        {attachments.length > 0 && (
+          <div className="border-x-2 border-b-2 border-black">
+            <div className="px-3 py-1 font-bold text-center text-[11px] uppercase border-b border-black" style={{ backgroundColor: cfg.accentBg }}>
+              Documentos
+            </div>
+            <div className="p-3 grid grid-cols-2 gap-3">
+              {attachments.map(f => (
+                f.isImage ? (
+                  <div key={f.url} className="border border-gray-200 rounded overflow-hidden">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={f.url} alt={f.name} className="w-full object-contain max-h-64" />
+                    <p className="text-[10px] text-gray-500 p-1 truncate">{f.name}</p>
+                  </div>
+                ) : (
+                  <div key={f.url} className="border border-gray-200 rounded p-2 flex items-center gap-2">
+                    <span className="text-[11px] text-blue-600 underline break-all">{f.name}</span>
+                  </div>
+                )
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Assinaturas */}
         <div className="border-x-2 border-b-2 border-black">
           <div className="grid grid-cols-3 divide-x divide-black">
@@ -333,7 +372,7 @@ export default function OSPage({ params }: { params: Promise<{ id: string }> }) 
             <div className="p-3">
               <p className="text-[10px] font-bold uppercase text-gray-500 mb-6">Técnico Responsável</p>
               <div className="border-t border-black pt-1">
-                <p className="text-[10px] text-center text-gray-500">{so.driver ?? ''}</p>
+                <p className="text-[10px] text-center text-gray-500">{so.team?.name ?? so.driver ?? ''}</p>
               </div>
             </div>
             <div className="p-3">

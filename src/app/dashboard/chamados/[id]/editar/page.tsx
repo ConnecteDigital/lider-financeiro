@@ -479,16 +479,18 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                           <label className="block text-xs font-medium text-slate-600 mb-1">
                             {serviceCalcs[st.id].billing === 'litros' ? 'Qtd (L)' : serviceCalcs[st.id].billing?.includes('metro') ? 'Qtd (m)' : 'Quantidade'}
                           </label>
-                          <input type="number" min="0" step="0.01" value={serviceCalcs[st.id].quantity}
-                            onChange={e => updateCalc(st.id, 'quantity', parseFloat(e.target.value) || 0)}
+                          <input type="text" inputMode="decimal"
+                            value={serviceCalcs[st.id].quantity || ''}
+                            onChange={e => updateCalc(st.id, 'quantity', parseFloat(e.target.value.replace(',', '.')) || 0)}
                             className="w-full px-2 py-1.5 border border-orange-300 rounded text-xs bg-white focus:outline-none focus:ring-1 focus:ring-orange-400" />
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-slate-600 mb-1">
                             {serviceCalcs[st.id].billing === 'litros' ? 'Preço/L (R$)' : serviceCalcs[st.id].billing?.includes('metro') ? 'Preço/m (R$)' : 'Valor (R$)'}
                           </label>
-                          <input type="number" min="0" step="0.01" value={serviceCalcs[st.id].unitPrice}
-                            onChange={e => updateCalc(st.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                          <input type="text" inputMode="decimal"
+                            value={serviceCalcs[st.id].unitPrice || ''}
+                            onChange={e => updateCalc(st.id, 'unitPrice', parseFloat(e.target.value.replace(',', '.')) || 0)}
                             className="w-full px-2 py-1.5 border border-orange-300 rounded text-xs bg-white focus:outline-none focus:ring-1 focus:ring-orange-400" />
                         </div>
                         <div>

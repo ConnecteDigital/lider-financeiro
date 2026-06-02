@@ -365,11 +365,20 @@ export default function NovoChamadoPage() {
               <p className="text-emerald-700 text-sm mt-0.5">{isScheduled ? 'OS de agendamento criada com sucesso.' : 'Ordem de serviço aprovada criada.'}</p>
             </div>
             <div className="flex gap-2">
-              <Link href={`/os/${savedCallId}`} target="_blank"
-                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-3 py-2 rounded-lg transition">
-                <Share2 className="w-4 h-4" />
-                Ver / Compartilhar OS
-              </Link>
+              {isScheduled ? (
+                <button
+                  onClick={() => handleShare(savedOsNumber)}
+                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-3 py-2 rounded-lg transition">
+                  <Share2 className="w-4 h-4" />
+                  Enviar WhatsApp
+                </button>
+              ) : (
+                <Link href={`/os/${savedCallId}`} target="_blank"
+                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-3 py-2 rounded-lg transition">
+                  <Share2 className="w-4 h-4" />
+                  Ver / Compartilhar OS
+                </Link>
+              )}
             </div>
           </div>
         )}
@@ -555,6 +564,16 @@ export default function NovoChamadoPage() {
           </div>
         )}
 
+        {/* Endereço para não quis visita */}
+        {callStatus === 'nao_quis_visita' && (
+          <div className="border border-zinc-200 bg-zinc-50 rounded-lg p-4">
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Endereço</label>
+            <input type="text" value={callAddress} onChange={e => setCallAddress(e.target.value)}
+              placeholder="Rua, número, bairro, cidade"
+              className={iCls} />
+          </div>
+        )}
+
         {/* Tipos de serviço — disponível em agendado e aprovado */}
         {(isScheduled || isApproved) && (
           <div>
@@ -623,9 +642,9 @@ export default function NovoChamadoPage() {
                              'Quantidade'}
                           </label>
                           <input
-                            type="number" min="0" step="0.01"
-                            value={serviceCalcs[st.id].quantity}
-                            onChange={e => updateCalc(st.id, 'quantity', parseFloat(e.target.value) || 0)}
+                            type="text" inputMode="decimal"
+                            value={serviceCalcs[st.id].quantity || ''}
+                            onChange={e => updateCalc(st.id, 'quantity', parseFloat(e.target.value.replace(',', '.')) || 0)}
                             className="w-full px-2 py-1.5 border border-orange-300 rounded text-xs bg-white focus:outline-none focus:ring-1 focus:ring-orange-400"
                           />
                         </div>
@@ -636,9 +655,9 @@ export default function NovoChamadoPage() {
                              'Valor (R$)'}
                           </label>
                           <input
-                            type="number" min="0" step="0.01"
-                            value={serviceCalcs[st.id].unitPrice}
-                            onChange={e => updateCalc(st.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                            type="text" inputMode="decimal"
+                            value={serviceCalcs[st.id].unitPrice || ''}
+                            onChange={e => updateCalc(st.id, 'unitPrice', parseFloat(e.target.value.replace(',', '.')) || 0)}
                             className="w-full px-2 py-1.5 border border-orange-300 rounded text-xs bg-white focus:outline-none focus:ring-1 focus:ring-orange-400"
                           />
                         </div>
