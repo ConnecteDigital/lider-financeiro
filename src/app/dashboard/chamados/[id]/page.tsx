@@ -4,8 +4,8 @@ import { useEffect, useState, useRef } from 'react'
 import { ArrowLeft, Phone, CheckCircle, XCircle, Clock, Edit, DollarSign, User, FileText, Wrench, Paperclip, Upload, Trash2, Download, Printer } from 'lucide-react'
 import Link from 'next/link'
 import { use } from 'react'
-import { getCall } from '@/lib/db/calls'
-import { updateCall } from '@/lib/db/calls'
+import { useRouter } from 'next/navigation'
+import { getCall, updateCall, deleteCall } from '@/lib/db/calls'
 import { updateExpense } from '@/lib/db/expenses'
 import { createClient } from '@/lib/supabase/client'
 
@@ -40,9 +40,11 @@ const fmt = (v: number) => `R$ ${Number(v).toLocaleString('pt-BR', { minimumFrac
 
 export default function ChamadoDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
+  const router = useRouter()
   const [call, setCall] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [updatingPayment, setUpdatingPayment] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [attachments, setAttachments] = useState<any[]>([])
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -97,6 +99,18 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
     const supabase = createClient()
     const { data } = supabase.storage.from('chamados-anexos').getPublicUrl(`${id}/${name}`)
     window.open(data.publicUrl, '_blank')
+  }
+
+  async function handleDeleteCall() {
+    if (!confirm('Tem certeza que deseja excluir este chamado? Esta ação não pode ser desfeita.')) return
+    setDeleting(true)
+    try {
+      await deleteCall(id)
+      router.push('/dashboard/chamados')
+    } catch {
+      alert('Erro ao excluir chamado. Tente novamente.')
+      setDeleting(false)
+    }
   }
 
   async function updatePaymentStatus(soId: string, status: string) {
@@ -169,10 +183,15 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
             </Link>
           )}
           <Link href={`/dashboard/chamados/${id}/editar`}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-3 py-2 rounded-lg transition">
+            className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold px-3 py-2 rounded-lg transition">
             <Edit className="w-4 h-4" />
             Editar Chamado
           </Link>
+          <button onClick={handleDeleteCall} disabled={deleting}
+            className="flex items-center gap-2 bg-red-50 hover:bg-red-100 text-red-600 text-sm font-semibold px-3 py-2 rounded-lg transition border border-red-200">
+            <Trash2 className="w-4 h-4" />
+            <span className="hidden sm:inline">{deleting ? 'Excluindo...' : 'Excluir'}</span>
+          </button>
         </div>
       </div>
 

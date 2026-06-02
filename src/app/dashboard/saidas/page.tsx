@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Plus, Search, CheckCircle, Clock, AlertCircle, TrendingDown, Repeat } from 'lucide-react'
 import Link from 'next/link'
-import { getExpenses, updateExpense } from '@/lib/db/expenses'
+import { getExpenses, updateExpense, deleteExpense } from '@/lib/db/expenses'
 
 export default function SaidasPage() {
   const [search, setSearch] = useState('')
@@ -25,6 +25,16 @@ export default function SaidasPage() {
   }, [typeFilter, statusFilter, search])
 
   useEffect(() => { load() }, [load])
+
+  async function handleDelete(id: string, description: string) {
+    if (!confirm(`Excluir a saída "${description}"? Esta ação não pode ser desfeita.`)) return
+    try {
+      await deleteExpense(id)
+      load()
+    } catch {
+      alert('Erro ao excluir. Tente novamente.')
+    }
+  }
 
   async function toggleStatus(id: string, currentStatus: string) {
     const newStatus = currentStatus === 'pago' ? 'pendente' : 'pago'
@@ -142,6 +152,7 @@ export default function SaidasPage() {
                   {e.status === 'pago' ? <><CheckCircle className="w-3 h-3" /> Pago</> : <><Clock className="w-3 h-3" /> Pendente</>}
                 </button>
                 <Link href={`/dashboard/saidas/${e.id}/editar`} className="text-xs text-orange-500 font-medium">Editar</Link>
+                <button onClick={() => handleDelete(e.id, e.description)} className="text-xs text-red-400 font-medium">Excluir</button>
               </div>
             </div>
           </div>
@@ -215,7 +226,10 @@ export default function SaidasPage() {
                     </button>
                   </td>
                   <td className="px-4 py-3">
-                    <Link href={`/dashboard/saidas/${e.id}/editar`} className="text-xs text-slate-400 hover:text-slate-600 transition">Editar</Link>
+                    <div className="flex items-center gap-3">
+                      <Link href={`/dashboard/saidas/${e.id}/editar`} className="text-xs text-slate-400 hover:text-slate-600 transition">Editar</Link>
+                      <button onClick={() => handleDelete(e.id, e.description)} className="text-xs text-red-400 hover:text-red-600 transition">Excluir</button>
+                    </div>
                   </td>
                 </tr>
               ))}
