@@ -73,6 +73,8 @@ export default function NovaSaidaPage() {
       await createExpense({
         ...form,
         amount: parseFloat(form.amount),
+        status: form.type === 'avulso' ? 'pago' : 'pendente',
+        paid_date: form.type === 'avulso' ? form.due_date : null,
         recurrence_day: form.type === 'fixo' && form.recurrence_day ? parseInt(form.recurrence_day) : null,
         supplier_id: form.supplier_id || null,
         client_id: form.client_id || null,

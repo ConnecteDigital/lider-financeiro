@@ -63,8 +63,26 @@ export default function DashboardPage() {
         <DateRangePicker value={range} onChange={setRange} />
       </div>
 
-      {/* Stats cards - 2x2 grid on mobile showing 4 at once, scroll for rest */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
+      {/* Stats cards — 2×2 visible on mobile, scroll right for rest; full row on desktop */}
+      <div className="sm:hidden overflow-x-auto -mx-4 px-4 pb-1">
+        <div className="grid grid-flow-col grid-rows-2 gap-3 w-max">
+          {(loading ? [...Array(7)] : cards).map((card, i) =>
+            loading ? (
+              <div key={i} className="bg-white rounded-2xl border border-zinc-100 p-4 animate-pulse h-24 w-[calc(50vw-20px)]" />
+            ) : (
+              <div key={i} className="bg-white rounded-2xl border border-zinc-100 p-4 shadow-sm w-[calc(50vw-20px)]">
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wide leading-none truncate pr-1">{card.label}</p>
+                  <card.icon className={`w-3.5 h-3.5 flex-shrink-0 ${card.color}`} />
+                </div>
+                <p className={`text-base font-bold leading-tight ${card.color}`}>{card.value}</p>
+                <p className="text-xs text-zinc-400 mt-0.5 truncate">{card.sub}</p>
+              </div>
+            )
+          )}
+        </div>
+      </div>
+      <div className="hidden sm:grid grid-cols-3 lg:grid-cols-7 gap-3">
         {loading ? (
           [...Array(7)].map((_, i) => (
             <div key={i} className="bg-white rounded-2xl border border-zinc-100 p-4 animate-pulse h-24" />

@@ -16,21 +16,25 @@ type BillingSystem = 'metro_linear' | 'metro_cubico' | 'litros' | 'carga' | 'val
 interface Item { id: string; quantity: number; description: string; unit_price: number }
 
 const SERVICE_TYPES_OPTIONS = [
-  { id: 'desentupimento', label: 'Desentupimento (ralo, vaso, esgoto, cano, pia, rede)' },
   { id: 'desentupidora_ralo', label: 'Desentupidora de Ralo' },
+  { id: 'desentupidora_pia', label: 'Desentupidora de Pia' },
+  { id: 'desentupidora_cano', label: 'Desentupidora de Cano' },
+  { id: 'desentupidora_vaso', label: 'Desentupidora de Vaso' },
+  { id: 'desentupidora_coluna', label: 'Desentupidora de Coluna' },
+  { id: 'desentupidora_esgoto', label: 'Desentupidora de Esgoto' },
   { id: 'limpa_fossa', label: 'Limpa Fossa' },
   { id: 'hidrojateamento', label: 'Hidrojateamento' },
-  { id: 'limpeza_caixa_gordura', label: 'Limpeza de Caixa de Gordura' },
-  { id: 'outros', label: 'Outros' },
 ]
 
 const BILLING_FOR_TYPE: Record<string, { label: string; value: BillingSystem }[]> = {
-  desentupimento:       [{ label: 'Metro Linear', value: 'metro_linear' }, { label: 'Valor Fechado', value: 'valor_fechado' }, { label: 'Metro Cúbico', value: 'metro_cubico' }],
-  desentupidora_ralo:   [{ label: 'Metro Linear', value: 'metro_linear' }, { label: 'Valor Fechado', value: 'valor_fechado' }],
-  limpa_fossa:          [{ label: 'Litros', value: 'litros' }, { label: 'Carga', value: 'carga' }, { label: 'Valor Fechado', value: 'valor_fechado' }],
-  hidrojateamento:      [{ label: 'Metro Quadrado', value: 'metro_quadrado' }, { label: 'Valor Fechado', value: 'valor_fechado' }],
-  limpeza_caixa_gordura:[{ label: 'Valor Fechado', value: 'valor_fechado' }, { label: 'Metro Linear', value: 'metro_linear' }],
-  outros:               [{ label: 'Valor Fechado', value: 'valor_fechado' }, { label: 'Metro Linear', value: 'metro_linear' }, { label: 'Litros', value: 'litros' }],
+  desentupidora_ralo:    [{ label: 'Metro Linear', value: 'metro_linear' }, { label: 'Valor Fechado', value: 'valor_fechado' }],
+  desentupidora_pia:     [{ label: 'Metro Linear', value: 'metro_linear' }, { label: 'Valor Fechado', value: 'valor_fechado' }],
+  desentupidora_cano:    [{ label: 'Metro Linear', value: 'metro_linear' }, { label: 'Valor Fechado', value: 'valor_fechado' }],
+  desentupidora_vaso:    [{ label: 'Metro Linear', value: 'metro_linear' }, { label: 'Valor Fechado', value: 'valor_fechado' }],
+  desentupidora_coluna:  [{ label: 'Metro Linear', value: 'metro_linear' }, { label: 'Valor Fechado', value: 'valor_fechado' }],
+  desentupidora_esgoto:  [{ label: 'Metro Linear', value: 'metro_linear' }, { label: 'Valor Fechado', value: 'valor_fechado' }, { label: 'Metro Cúbico', value: 'metro_cubico' }],
+  limpa_fossa:           [{ label: 'Litros', value: 'litros' }, { label: 'Carga', value: 'carga' }, { label: 'Valor Fechado', value: 'valor_fechado' }],
+  hidrojateamento:       [{ label: 'Metro Quadrado', value: 'metro_quadrado' }, { label: 'Valor Fechado', value: 'valor_fechado' }],
 }
 
 interface ServiceCalc {
@@ -96,6 +100,8 @@ export default function NovoChamadoPage() {
   const [hasHydraulicPlan, setHasHydraulicPlan] = useState(false)
   const [hasNoHydraulicPlan, setHasNoHydraulicPlan] = useState(false)
   const [hasGuarantee, setHasGuarantee] = useState(false)
+  const [hasGuarantee60, setHasGuarantee60] = useState(false)
+  const [hasGuarantee90, setHasGuarantee90] = useState(false)
   const [hasNoGuarantee, setHasNoGuarantee] = useState(false)
   const [teamId, setTeamId] = useState('')
   const [driver, setDriver] = useState('')
@@ -292,6 +298,8 @@ export default function NovoChamadoPage() {
             has_hydraulic_plan: hasHydraulicPlan,
             has_no_hydraulic_plan: hasNoHydraulicPlan,
             has_guarantee: hasGuarantee,
+            has_guarantee_60: hasGuarantee60,
+            has_guarantee_90: hasGuarantee90,
             has_no_guarantee: hasNoGuarantee,
             equipment_rental_pct: equipmentRentalPct,
             equipment_rental_value: equipmentRentalValue,
@@ -525,19 +533,27 @@ export default function NovoChamadoPage() {
                 <input type="time" value={scheduledTime} onChange={e => setScheduledTime(e.target.value)}
                   className={iCls} />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Tipo de Serviço</label>
-                <select value={serviceCategory} onChange={e => setServiceCategory(e.target.value)} className={sCls}>
-                  <option value="">Selecionar tipo</option>
-                  {SERVICE_TYPES_OPTIONS.map(st => <option key={st.id} value={st.label}>{st.label}</option>)}
-                </select>
-              </div>
-              <div className="sm:col-span-1">
+              <div className="sm:col-span-2">
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Endereço do Serviço</label>
                 <input type="text" value={callAddress} onChange={e => setCallAddress(e.target.value)}
                   placeholder="Rua, número, bairro, cidade"
                   className={iCls} />
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tipos de serviço — disponível em agendado e aprovado */}
+        {(isScheduled || isApproved) && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Tipo(s) de Serviço</label>
+            <div className="flex flex-wrap gap-2">
+              {SERVICE_TYPES_OPTIONS.map(st => (
+                <button key={st.id} type="button" onClick={() => toggleServiceType(st.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${selectedServiceTypes.includes(st.id) ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-200 text-slate-600 hover:border-orange-300'}`}>
+                  {st.label}
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -748,9 +764,16 @@ export default function NovoChamadoPage() {
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Vencimento</label>
                 <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={iCls} />
               </div>
-              <div>
+              <div className="sm:col-span-3">
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Forma de Pagamento</label>
-                <input type="text" placeholder="Dinheiro, PIX, Cartão..." value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className={iCls} />
+                <div className="flex flex-wrap gap-2">
+                  {['PIX', 'Dinheiro', 'Cartão de Crédito', 'Cartão de Débito', 'Cheque', 'Outro'].map(m => (
+                    <button key={m} type="button" onClick={() => setPaymentMethod(paymentMethod === m ? '' : m)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${paymentMethod === m ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-200 text-slate-600 hover:border-orange-300'}`}>
+                      {m}
+                    </button>
+                  ))}
+                </div>
               </div>
               {isApproved && (
                 <div>
@@ -841,7 +864,9 @@ export default function NovoChamadoPage() {
                   { label: 'Sem planta hidráulica', val: hasNoHydraulicPlan, set: setHasNoHydraulicPlan },
                 ]},
                 { title: 'Garantia', options: [
-                  { label: 'Com garantia de 30 dias', val: hasGuarantee, set: setHasGuarantee },
+                  { label: 'Garantia 30 dias', val: hasGuarantee, set: setHasGuarantee },
+                  { label: 'Garantia 60 dias', val: hasGuarantee60, set: setHasGuarantee60 },
+                  { label: 'Garantia 90 dias', val: hasGuarantee90, set: setHasGuarantee90 },
                   { label: 'Sem garantia', val: hasNoGuarantee, set: setHasNoGuarantee },
                 ]},
               ].map(group => (

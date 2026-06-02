@@ -101,7 +101,55 @@ export default function SaidasPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+      {/* Mobile card view */}
+      <div className="sm:hidden space-y-3">
+        {loading ? (
+          [...Array(4)].map((_, i) => (
+            <div key={i} className="bg-white rounded-xl border border-slate-100 p-4 animate-pulse h-20" />
+          ))
+        ) : expenses.length === 0 ? (
+          <div className="bg-white rounded-xl border border-slate-100 p-8 text-center text-slate-400 text-sm">
+            Nenhuma saída encontrada
+          </div>
+        ) : expenses.map(e => (
+          <div key={e.id} className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 mb-1">
+                  {e.type === 'fixo' && <Repeat className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />}
+                  <span className="text-sm font-semibold text-slate-800 truncate">{e.description}</span>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${e.type === 'fixo' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'}`}>
+                    {e.type === 'fixo' ? 'Fixo' : 'Avulso'}
+                  </span>
+                  {e.category && <span className="text-xs text-slate-500">{e.category}</span>}
+                  <span className="text-xs text-slate-400">{new Date(e.due_date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                </div>
+                {(e.supplier?.name || e.client?.name) && (
+                  <div className="mt-1">
+                    {e.supplier?.name && <span className="text-xs text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded mr-1">{e.supplier.name}</span>}
+                    {e.client?.name && <span className="text-xs text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">{e.client.name}</span>}
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                <span className="text-base font-bold text-slate-800">{fmt(e.amount)}</span>
+                <button onClick={() => toggleStatus(e.id, e.status)}
+                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium transition ${
+                    e.status === 'pago' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                  }`}>
+                  {e.status === 'pago' ? <><CheckCircle className="w-3 h-3" /> Pago</> : <><Clock className="w-3 h-3" /> Pendente</>}
+                </button>
+                <Link href={`/dashboard/saidas/${e.id}/editar`} className="text-xs text-orange-500 font-medium">Editar</Link>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop table view */}
+      <div className="hidden sm:block bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>

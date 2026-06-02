@@ -33,22 +33,11 @@ export default function ImprimirOSPage({ params }: { params: Promise<{ id: strin
     getCall(id).then(setCall).catch(console.error).finally(() => setLoading(false))
   }, [id])
 
-  async function handleShare() {
+  function handleShare() {
     if (!call || !so) return
-    const client = call.client
-    const text = `📋 OS ${so.os_number} - ${cfg.name}\n` +
-      `👤 Cliente: ${client?.name ?? call.contact_name ?? '—'}\n` +
-      `📅 Data: ${so.date ? new Date(so.date + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}\n` +
-      `📍 Endereço: ${client?.address ?? call.call_address ?? '—'}\n` +
-      `🔧 Serviço: ${call.service_category ?? '—'}\n` +
-      `💰 Total: ${fmt(so.total_value)}`
-
-    if (navigator.share) {
-      await navigator.share({ title: `OS ${so.os_number}`, text })
-    } else {
-      await navigator.clipboard.writeText(text)
-      alert('Dados da OS copiados!')
-    }
+    const clientName = (call.client?.name ?? call.contact_name ?? 'cliente').replace(/[^a-zA-Z0-9\s]/g, '').trim().replace(/\s+/g, '_')
+    document.title = `OS-${so.os_number}_${clientName}`
+    window.print()
   }
 
   if (loading) return <div className="flex items-center justify-center h-screen text-slate-500">Carregando...</div>
@@ -67,7 +56,9 @@ export default function ImprimirOSPage({ params }: { params: Promise<{ id: strin
     so.has_no_knowledge && 'Sem conhecimento',
     so.has_hydraulic_plan && 'Com planta hidráulica',
     so.has_no_hydraulic_plan && 'Sem planta hidráulica',
-    so.has_guarantee && 'Com garantia de 30 dias',
+    so.has_guarantee && 'Garantia 30 dias',
+    so.has_guarantee_60 && 'Garantia 60 dias',
+    so.has_guarantee_90 && 'Garantia 90 dias',
     so.has_no_guarantee && 'Sem garantia',
   ].filter(Boolean)
 
@@ -94,16 +85,9 @@ export default function ImprimirOSPage({ params }: { params: Promise<{ id: strin
         {/* Cabeçalho com cor da empresa */}
         <div className="mb-0 rounded-t-sm overflow-hidden border-2 border-black">
           <div className="flex" style={{ backgroundColor: cfg.headerBg }}>
-            {/* Logo / empresa */}
-            <div className="border-r-2 border-black/30 p-3 flex items-center justify-center w-40 min-h-[80px]">
-              <div className="text-center">
-                <p className="font-black text-2xl leading-tight" style={{ color: cfg.headerText }}>LÍDER</p>
-                <p className="text-[10px] leading-tight" style={{ color: cfg.headerText, opacity: 0.85 }}>Desentupidora</p>
-              </div>
-            </div>
             {/* Dados empresa */}
             <div className="flex-1 p-3 text-[11px] leading-snug" style={{ color: cfg.headerText }}>
-              <p className="font-bold text-sm">{cfg.name}</p>
+              <p className="font-black text-lg leading-tight">{cfg.name}</p>
               <p style={{ opacity: 0.85 }}>Atendimento 24h · Domingos e Feriados</p>
             </div>
             {/* OS número */}
