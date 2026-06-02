@@ -5,6 +5,7 @@ import { ArrowLeft, Save, Plus } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createExpense } from '@/lib/db/expenses'
+import { p } from '@/lib/parse-decimal'
 import { getSuppliers } from '@/lib/db/suppliers'
 import { getClients } from '@/lib/db/clients'
 
@@ -72,7 +73,7 @@ export default function NovaSaidaPage() {
     try {
       await createExpense({
         ...form,
-        amount: parseFloat(form.amount),
+        amount: p(form.amount),
         status: form.type === 'avulso' ? 'pago' : 'pendente',
         paid_date: form.type === 'avulso' ? form.due_date : null,
         recurrence_day: form.type === 'fixo' && form.recurrence_day ? parseInt(form.recurrence_day) : null,
@@ -136,8 +137,8 @@ export default function NovaSaidaPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor (R$) *</label>
-            <input type="number" required min="0" step="0.01" value={form.amount} onChange={e => set('amount', e.target.value)}
-              className={iCls} />
+            <input type="text" inputMode="decimal" required value={form.amount} onChange={e => set('amount', e.target.value)}
+              placeholder="0,00" className={iCls} />
           </div>
         </div>
 

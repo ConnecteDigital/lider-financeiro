@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { use } from 'react'
 import { updateExpense } from '@/lib/db/expenses'
+import { p } from '@/lib/parse-decimal'
 import { getSuppliers } from '@/lib/db/suppliers'
 import { getClients } from '@/lib/db/clients'
 import { createClient } from '@/lib/supabase/client'
@@ -57,7 +58,7 @@ export default function EditarSaidaPage({ params }: { params: Promise<{ id: stri
     try {
       await updateExpense(id, {
         ...form,
-        amount: parseFloat(form.amount),
+        amount: p(form.amount),
         recurrence_day: form.type === 'fixo' && form.recurrence_day ? parseInt(form.recurrence_day) : null,
         supplier_id: form.supplier_id || null,
         client_id: form.client_id || null,
@@ -105,8 +106,8 @@ export default function EditarSaidaPage({ params }: { params: Promise<{ id: stri
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor (R$) *</label>
-            <input type="number" required min="0" step="0.01" value={form.amount} onChange={e => set('amount', e.target.value)}
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            <input type="text" inputMode="decimal" required value={form.amount} onChange={e => set('amount', e.target.value)}
+              placeholder="0,00" className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
           </div>
         </div>
 

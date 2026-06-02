@@ -336,9 +336,9 @@ export default function OSPage({ params }: { params: Promise<{ id: string }> }) 
           </div>
         </div>
 
-        {/* Documentos anexados */}
+        {/* Documentos anexados — força nova página no print */}
         {attachments.length > 0 && (
-          <div className="border-x-2 border-b-2 border-black">
+          <div className="border-x-2 border-b-2 border-black" style={{ breakBefore: 'page', pageBreakBefore: 'always' }}>
             <div className="px-3 py-1 font-bold text-center text-[11px] uppercase border-b border-black" style={{ backgroundColor: cfg.accentBg }}>
               Documentos
             </div>

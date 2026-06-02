@@ -10,6 +10,7 @@ import { getClients, createClient_ } from '@/lib/db/clients'
 import { getTeams } from '@/lib/db/teams'
 import { getAuxiliaries } from '@/lib/db/auxiliaries'
 import { createClient as createSupabaseClient } from '@/lib/supabase/client'
+import { p } from '@/lib/parse-decimal'
 
 type ServiceExecType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
 type PaymentStatus = 'pago' | 'pago_parcial' | 'pendente'
@@ -41,8 +42,8 @@ const BILLING_FOR_TYPE: Record<string, { label: string; value: BillingSystem }[]
 interface ServiceCalc {
   typeId: string
   billing: BillingSystem | ''
-  quantity: number
-  unitPrice: number
+  quantity: string
+  unitPrice: string
 }
 
 function localToday() {
@@ -93,10 +94,10 @@ export default function NovoChamadoPage() {
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('pendente')
   const [billingSystem, setBillingSystem] = useState<BillingSystem | ''>('')
   const [items, setItems] = useState<Item[]>([{ id: '1', quantity: 1, description: '', unit_price: 0 }])
-  const [discount, setDiscount] = useState(0)
-  const [taxes, setTaxes] = useState(0)
-  const [equipmentRentalPct, setEquipmentRentalPct] = useState(0)
-  const [equipmentRentalValue, setEquipmentRentalValue] = useState(0)
+  const [discount, setDiscount] = useState('')
+  const [taxes, setTaxes] = useState('')
+  const [equipmentRentalPct, setEquipmentRentalPct] = useState('')
+  const [equipmentRentalValue, setEquipmentRentalValue] = useState('')
   const [hasFloorPlan, setHasFloorPlan] = useState(false)
   const [hasNoFloorPlan, setHasNoFloorPlan] = useState(false)
   const [hasNoKnowledge, setHasNoKnowledge] = useState(false)
@@ -113,21 +114,21 @@ export default function NovoChamadoPage() {
   const [vehicle, setVehicle] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('')
-  const [otherServiceValue, setOtherServiceValue] = useState(0)
-  const [amountPaid, setAmountPaid] = useState(0)
-  const [remainingAmount, setRemainingAmount] = useState(0)
+  const [otherServiceValue, setOtherServiceValue] = useState('')
+  const [amountPaid, setAmountPaid] = useState('')
+  const [remainingAmount, setRemainingAmount] = useState('')
   const [remainingDueDate, setRemainingDueDate] = useState('')
   const [conditions, setConditions] = useState('')
   const [observations, setObservations] = useState('')
   // Custos terceirizado
-  const [fuelCost, setFuelCost] = useState(0)
-  const [mealCost, setMealCost] = useState(0)
-  const [truckCost, setTruckCost] = useState(0)
-  const [otherCost, setOtherCost] = useState(0)
+  const [fuelCost, setFuelCost] = useState('')
+  const [mealCost, setMealCost] = useState('')
+  const [truckCost, setTruckCost] = useState('')
+  const [otherCost, setOtherCost] = useState('')
   // Custos próprio
-  const [ownMaterialCost, setOwnMaterialCost] = useState(0)
-  const [ownFuelCost, setOwnFuelCost] = useState(0)
-  const [ownOtherCost, setOwnOtherCost] = useState(0)
+  const [ownMaterialCost, setOwnMaterialCost] = useState('')
+  const [ownFuelCost, setOwnFuelCost] = useState('')
+  const [ownOtherCost, setOwnOtherCost] = useState('')
 
   useEffect(() => {
     Promise.all([getClients(), getTeams(), getAuxiliaries()])
@@ -143,7 +144,7 @@ export default function NovoChamadoPage() {
     })
     if (!serviceCalcs[typeId]) {
       const defaultBilling = BILLING_FOR_TYPE[typeId]?.[0]?.value ?? ''
-      setServiceCalcs(prev => ({ ...prev, [typeId]: { typeId, billing: defaultBilling, quantity: 1, unitPrice: 0 } }))
+      setServiceCalcs(prev => ({ ...prev, [typeId]: { typeId, billing: defaultBilling, quantity: '1', unitPrice: '' } }))
     }
   }
 
@@ -156,14 +157,14 @@ export default function NovoChamadoPage() {
     const generated: Item[] = []
     for (const typeId of selectedServiceTypes) {
       const calc = serviceCalcs[typeId]
-      if (!calc || calc.unitPrice === 0) continue
+      if (!calc || p(calc.unitPrice) === 0) continue
       const typeName = SERVICE_TYPES_OPTIONS.find(t => t.id === typeId)?.label ?? typeId
       const billingLabel = calc.billing ? BILLING_FOR_TYPE[typeId]?.find(b => b.value === calc.billing)?.label ?? calc.billing : ''
       generated.push({
         id: typeId,
-        quantity: calc.quantity,
+        quantity: p(calc.quantity),
         description: `${typeName}${billingLabel ? ` - ${billingLabel}` : ''}`,
-        unit_price: calc.unitPrice,
+        unit_price: p(calc.unitPrice),
       })
     }
     // Include manual items that have description
@@ -173,7 +174,7 @@ export default function NovoChamadoPage() {
 
   const allItems = isApproved ? buildItemsFromCalcs() : []
   const subtotal = allItems.reduce((s, i) => s + i.quantity * i.unit_price, 0)
-  const total = subtotal - discount + taxes
+  const total = subtotal - p(discount) + p(taxes)
 
   const addItem = () => setItems(prev => [...prev, { id: Date.now().toString(), quantity: 1, description: '', unit_price: 0 }])
   const removeItem = (id: string) => setItems(prev => prev.filter(i => i.id !== id))
@@ -308,21 +309,21 @@ export default function NovoChamadoPage() {
             has_guarantee_60: hasGuarantee60,
             has_guarantee_90: hasGuarantee90,
             has_no_guarantee: hasNoGuarantee,
-            equipment_rental_pct: equipmentRentalPct,
-            equipment_rental_value: equipmentRentalValue,
-            discount,
-            taxes,
-            outsource_fuel_cost: fuelCost,
-            outsource_meal_cost: mealCost,
-            outsource_truck_cost: truckCost,
-            outsource_other_cost: otherCost,
-            other_service_value: otherServiceValue,
-            own_material_cost: ownMaterialCost,
-            own_fuel_cost: ownFuelCost,
-            own_other_cost: ownOtherCost,
+            equipment_rental_pct: p(equipmentRentalPct),
+            equipment_rental_value: p(equipmentRentalValue),
+            discount: p(discount),
+            taxes: p(taxes),
+            outsource_fuel_cost: p(fuelCost),
+            outsource_meal_cost: p(mealCost),
+            outsource_truck_cost: p(truckCost),
+            outsource_other_cost: p(otherCost),
+            other_service_value: p(otherServiceValue),
+            own_material_cost: p(ownMaterialCost),
+            own_fuel_cost: p(ownFuelCost),
+            own_other_cost: p(ownOtherCost),
             payment_method: paymentMethod || null,
-            amount_paid: amountPaid,
-            remaining_amount: remainingAmount,
+            amount_paid: p(amountPaid),
+            remaining_amount: p(remainingAmount),
             remaining_due_date: remainingDueDate || null,
             conditions: conditions || null,
             observations: observations || null,
@@ -664,7 +665,7 @@ export default function NovoChamadoPage() {
                         <div>
                           <label className="block text-xs font-medium text-slate-600 mb-1">Total</label>
                           <div className="px-2 py-1.5 bg-orange-100 rounded text-xs font-bold text-orange-700">
-                            R$ {(serviceCalcs[st.id].quantity * serviceCalcs[st.id].unitPrice).toFixed(2)}
+                            R$ {(p(serviceCalcs[st.id].quantity) * p(serviceCalcs[st.id].unitPrice)).toFixed(2)}
                           </div>
                         </div>
                       </div>
@@ -678,12 +679,12 @@ export default function NovoChamadoPage() {
             <div className="border-t border-slate-100 pt-4 space-y-2">
               <div className="flex justify-between text-sm items-center">
                 <span className="text-slate-600">Descontos (R$)</span>
-                <input type="number" min="0" step="0.01" value={discount} onChange={e => setDiscount(Number(e.target.value))}
+                <input type="text" inputMode="decimal" value={discount} onChange={e => setDiscount(e.target.value)}
                   className="w-24 px-2 py-1 border border-orange-300 rounded text-sm text-right focus:outline-none focus:ring-1 focus:ring-orange-400 bg-white" />
               </div>
               <div className="flex justify-between text-sm items-center">
                 <span className="text-slate-600">Impostos (R$)</span>
-                <input type="number" min="0" step="0.01" value={taxes} onChange={e => setTaxes(Number(e.target.value))}
+                <input type="text" inputMode="decimal" value={taxes} onChange={e => setTaxes(e.target.value)}
                   className="w-24 px-2 py-1 border border-orange-300 rounded text-sm text-right focus:outline-none focus:ring-1 focus:ring-orange-400 bg-white" />
               </div>
               <div className="flex justify-between text-base font-bold border-t border-slate-100 pt-2">
@@ -772,7 +773,7 @@ export default function NovoChamadoPage() {
                 ].map(f => (
                   <div key={f.label}>
                     <label className="block text-sm font-medium text-slate-700 mb-1.5">{f.label}</label>
-                    <input type="number" min="0" step="0.01" value={f.val} onChange={e => f.set(Number(e.target.value))}
+                    <input type="text" inputMode="decimal" value={f.val} onChange={e => f.set(e.target.value)}
                       className={iCls} />
                   </div>
                 ))}
@@ -781,20 +782,20 @@ export default function NovoChamadoPage() {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Material (R$)</label>
-                  <input type="number" min="0" step="0.01" value={ownMaterialCost} onChange={e => setOwnMaterialCost(Number(e.target.value))} className={iCls} />
+                  <input type="text" inputMode="decimal" value={ownMaterialCost} onChange={e => setOwnMaterialCost(e.target.value)} className={iCls} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Combustível (R$)</label>
-                  <input type="number" min="0" step="0.01" value={ownFuelCost} onChange={e => setOwnFuelCost(Number(e.target.value))} className={iCls} />
+                  <input type="text" inputMode="decimal" value={ownFuelCost} onChange={e => setOwnFuelCost(e.target.value)} className={iCls} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Outros Custos (R$)</label>
-                  <input type="number" min="0" step="0.01" value={ownOtherCost} onChange={e => setOwnOtherCost(Number(e.target.value))} className={iCls} />
+                  <input type="text" inputMode="decimal" value={ownOtherCost} onChange={e => setOwnOtherCost(e.target.value)} className={iCls} />
                 </div>
-                {(ownMaterialCost + ownFuelCost + ownOtherCost) > 0 && (
+                {(p(ownMaterialCost) + p(ownFuelCost) + p(ownOtherCost)) > 0 && (
                   <div className="col-span-2 sm:col-span-3 bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex justify-between items-center">
                     <span className="text-sm font-medium text-emerald-800">Total de Custos do Serviço:</span>
-                    <span className="text-sm font-bold text-emerald-800">R$ {(ownMaterialCost + ownFuelCost + ownOtherCost).toFixed(2)}</span>
+                    <span className="text-sm font-bold text-emerald-800">R$ {(p(ownMaterialCost) + p(ownFuelCost) + p(ownOtherCost)).toFixed(2)}</span>
                   </div>
                 )}
               </div>
@@ -806,8 +807,8 @@ export default function NovoChamadoPage() {
               </label>
               <div className="flex items-center gap-3">
                 <span className="text-sm text-slate-600">R$</span>
-                <input type="number" min="0" step="0.01" value={otherServiceValue || ''} placeholder="0,00"
-                  onChange={e => setOtherServiceValue(Number(e.target.value))}
+                <input type="text" inputMode="decimal" value={otherServiceValue} placeholder="0,00"
+                  onChange={e => setOtherServiceValue(e.target.value)}
                   className="w-40 px-3 py-2 border border-orange-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-orange-400 bg-white" />
               </div>
             </div>
@@ -887,11 +888,11 @@ export default function NovoChamadoPage() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor Pago (R$)</label>
-                  <input type="number" min="0" step="0.01" value={amountPaid} onChange={e => setAmountPaid(Number(e.target.value))} className={iCls} />
+                  <input type="text" inputMode="decimal" value={amountPaid} onChange={e => setAmountPaid(e.target.value)} className={iCls} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor Restante (R$)</label>
-                  <input type="number" min="0" step="0.01" value={remainingAmount} onChange={e => setRemainingAmount(Number(e.target.value))} className={iCls} />
+                  <input type="text" inputMode="decimal" value={remainingAmount} onChange={e => setRemainingAmount(e.target.value)} className={iCls} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Data do Restante</label>

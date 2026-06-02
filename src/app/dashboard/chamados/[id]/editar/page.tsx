@@ -10,6 +10,7 @@ import { createServiceOrder, updateServiceOrder } from '@/lib/db/service-orders'
 import { getTeams } from '@/lib/db/teams'
 import { getClients } from '@/lib/db/clients'
 import { createClient } from '@/lib/supabase/client'
+import { p } from '@/lib/parse-decimal'
 
 type ServiceExecType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
 type PaymentStatus = 'pago' | 'pago_parcial' | 'pendente'
@@ -38,7 +39,7 @@ const BILLING_FOR_TYPE: Record<string, { label: string; value: BillingSystem }[]
   hidrojateamento:       [{ label: 'Metro Quadrado', value: 'metro_quadrado' }, { label: 'Valor Fechado', value: 'valor_fechado' }],
 }
 
-interface ServiceCalc { typeId: string; billing: BillingSystem | ''; quantity: number; unitPrice: number }
+interface ServiceCalc { typeId: string; billing: BillingSystem | ''; quantity: string; unitPrice: string }
 
 const iCls = "w-full px-3 py-2.5 border border-orange-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white"
 const sCls = "w-full px-3 py-2.5 border border-orange-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white"
@@ -76,10 +77,10 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('pendente')
   const [billingSystem, setBillingSystem] = useState<BillingSystem | ''>('')
   const [items, setItems] = useState<Item[]>([{ id: '1', quantity: 1, description: '', unit_price: 0 }])
-  const [discount, setDiscount] = useState(0)
-  const [taxes, setTaxes] = useState(0)
-  const [equipmentRentalPct, setEquipmentRentalPct] = useState(0)
-  const [equipmentRentalValue, setEquipmentRentalValue] = useState(0)
+  const [discount, setDiscount] = useState('')
+  const [taxes, setTaxes] = useState('')
+  const [equipmentRentalPct, setEquipmentRentalPct] = useState('')
+  const [equipmentRentalValue, setEquipmentRentalValue] = useState('')
   const [hasFloorPlan, setHasFloorPlan] = useState(false)
   const [hasNoFloorPlan, setHasNoFloorPlan] = useState(false)
   const [hasNoKnowledge, setHasNoKnowledge] = useState(false)
@@ -95,18 +96,18 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [vehicle, setVehicle] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('')
-  const [amountPaid, setAmountPaid] = useState(0)
-  const [remainingAmount, setRemainingAmount] = useState(0)
+  const [amountPaid, setAmountPaid] = useState('')
+  const [remainingAmount, setRemainingAmount] = useState('')
   const [remainingDueDate, setRemainingDueDate] = useState('')
   const [conditions, setConditions] = useState('')
   const [observations, setObservations] = useState('')
-  const [fuelCost, setFuelCost] = useState(0)
-  const [mealCost, setMealCost] = useState(0)
-  const [truckCost, setTruckCost] = useState(0)
-  const [otherCost, setOtherCost] = useState(0)
-  const [ownMaterialCost, setOwnMaterialCost] = useState(0)
-  const [ownFuelCost, setOwnFuelCost] = useState(0)
-  const [ownOtherCost, setOwnOtherCost] = useState(0)
+  const [fuelCost, setFuelCost] = useState('')
+  const [mealCost, setMealCost] = useState('')
+  const [truckCost, setTruckCost] = useState('')
+  const [otherCost, setOtherCost] = useState('')
+  const [ownMaterialCost, setOwnMaterialCost] = useState('')
+  const [ownFuelCost, setOwnFuelCost] = useState('')
+  const [ownOtherCost, setOwnOtherCost] = useState('')
 
   useEffect(() => {
     Promise.all([getCall(id), getClients(), getTeams()]).then(([call, cls, tms]) => {
@@ -128,10 +129,10 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         setServiceExecType(so.service_type ?? 'proprio')
         setPaymentStatus(so.payment_status ?? 'pendente')
         setBillingSystem(so.billing_system ?? '')
-        setDiscount(Number(so.discount ?? 0))
-        setTaxes(Number(so.taxes ?? 0))
-        setEquipmentRentalPct(Number(so.equipment_rental_pct ?? 0))
-        setEquipmentRentalValue(Number(so.equipment_rental_value ?? 0))
+        setDiscount(String(so.discount ?? ''))
+        setTaxes(String(so.taxes ?? ''))
+        setEquipmentRentalPct(String(so.equipment_rental_pct ?? ''))
+        setEquipmentRentalValue(String(so.equipment_rental_value ?? ''))
         setHasFloorPlan(so.has_floor_plan ?? false)
         setHasNoFloorPlan(so.has_no_floor_plan ?? false)
         setHasNoKnowledge(so.has_no_knowledge ?? false)
@@ -147,18 +148,18 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         setVehicle(so.vehicle ?? '')
         setDueDate(so.due_date ?? '')
         setPaymentMethod(so.payment_method ?? '')
-        setAmountPaid(Number(so.amount_paid ?? 0))
-        setRemainingAmount(Number(so.remaining_amount ?? 0))
+        setAmountPaid(String(so.amount_paid ?? ''))
+        setRemainingAmount(String(so.remaining_amount ?? ''))
         setRemainingDueDate(so.remaining_due_date ?? '')
         setConditions(so.conditions ?? '')
         setObservations(so.observations ?? '')
-        setFuelCost(Number(so.outsource_fuel_cost ?? 0))
-        setMealCost(Number(so.outsource_meal_cost ?? 0))
-        setTruckCost(Number(so.outsource_truck_cost ?? 0))
-        setOtherCost(Number(so.outsource_other_cost ?? 0))
-        setOwnMaterialCost(Number(so.own_material_cost ?? 0))
-        setOwnFuelCost(Number(so.own_fuel_cost ?? 0))
-        setOwnOtherCost(Number(so.own_other_cost ?? 0))
+        setFuelCost(String(so.outsource_fuel_cost ?? ''))
+        setMealCost(String(so.outsource_meal_cost ?? ''))
+        setTruckCost(String(so.outsource_truck_cost ?? ''))
+        setOtherCost(String(so.outsource_other_cost ?? ''))
+        setOwnMaterialCost(String(so.own_material_cost ?? ''))
+        setOwnFuelCost(String(so.own_fuel_cost ?? ''))
+        setOwnOtherCost(String(so.own_other_cost ?? ''))
 
         if (so.items?.length) {
           setItems(so.items.map((item: any) => ({
@@ -179,7 +180,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
     })
     if (!serviceCalcs[typeId]) {
       const defaultBilling = BILLING_FOR_TYPE[typeId]?.[0]?.value ?? ''
-      setServiceCalcs(prev => ({ ...prev, [typeId]: { typeId, billing: defaultBilling, quantity: 1, unitPrice: 0 } }))
+      setServiceCalcs(prev => ({ ...prev, [typeId]: { typeId, billing: defaultBilling, quantity: '1', unitPrice: '' } }))
     }
   }
 
@@ -191,14 +192,14 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
     const generated: Item[] = []
     for (const typeId of selectedServiceTypes) {
       const calc = serviceCalcs[typeId]
-      if (!calc || calc.unitPrice === 0) continue
+      if (!calc || p(calc.unitPrice) === 0) continue
       const typeName = SERVICE_TYPES_OPTIONS.find(t => t.id === typeId)?.label ?? typeId
       const billingLabel = calc.billing ? BILLING_FOR_TYPE[typeId]?.find(b => b.value === calc.billing)?.label ?? '' : ''
       generated.push({
         id: typeId,
-        quantity: calc.quantity,
+        quantity: p(calc.quantity),
         description: `${typeName}${billingLabel ? ` - ${billingLabel}` : ''}`,
-        unit_price: calc.unitPrice,
+        unit_price: p(calc.unitPrice),
       })
     }
     const manualItems = items.filter(i => i.description.trim() && !selectedServiceTypes.includes(i.id))
@@ -207,7 +208,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
 
   const allItems = isApproved ? buildItemsFromCalcs() : []
   const subtotal = allItems.reduce((s, i) => s + i.quantity * i.unit_price, 0)
-  const total = subtotal + equipmentRentalValue - discount + taxes
+  const total = subtotal + p(equipmentRentalValue) - p(discount) + p(taxes)
 
   const addItem = () => setItems(prev => [...prev, { id: Date.now().toString(), quantity: 1, description: '', unit_price: 0 }])
   const removeItem = (itemId: string) => setItems(prev => prev.filter(i => i.id !== itemId))
@@ -264,23 +265,23 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
           has_guarantee_60: hasGuarantee60,
           has_guarantee_90: hasGuarantee90,
           has_no_guarantee: hasNoGuarantee,
-          equipment_rental_pct: equipmentRentalPct,
-          equipment_rental_value: equipmentRentalValue,
+          equipment_rental_pct: p(equipmentRentalPct),
+          equipment_rental_value: p(equipmentRentalValue),
           subtotal,
-          discount,
-          taxes,
+          discount: p(discount),
+          taxes: p(taxes),
           total_value: total,
-          outsource_fuel_cost: fuelCost,
-          outsource_meal_cost: mealCost,
-          outsource_truck_cost: truckCost,
-          outsource_other_cost: otherCost,
-          own_material_cost: ownMaterialCost,
-          own_fuel_cost: ownFuelCost,
-          own_other_cost: ownOtherCost,
+          outsource_fuel_cost: p(fuelCost),
+          outsource_meal_cost: p(mealCost),
+          outsource_truck_cost: p(truckCost),
+          outsource_other_cost: p(otherCost),
+          own_material_cost: p(ownMaterialCost),
+          own_fuel_cost: p(ownFuelCost),
+          own_other_cost: p(ownOtherCost),
           payment_method: paymentMethod || null,
           payment_status: paymentStatus,
-          amount_paid: amountPaid,
-          remaining_amount: remainingAmount,
+          amount_paid: p(amountPaid),
+          remaining_amount: p(remainingAmount),
           remaining_due_date: remainingDueDate || null,
           conditions: conditions || null,
           observations: observations || null,
@@ -496,7 +497,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                         <div>
                           <label className="block text-xs font-medium text-slate-600 mb-1">Total</label>
                           <div className="px-2 py-1.5 bg-orange-100 rounded text-xs font-bold text-orange-700">
-                            R$ {(serviceCalcs[st.id].quantity * serviceCalcs[st.id].unitPrice).toFixed(2)}
+                            R$ {(p(serviceCalcs[st.id].quantity) * p(serviceCalcs[st.id].unitPrice)).toFixed(2)}
                           </div>
                         </div>
                       </div>
@@ -546,21 +547,21 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Locação Equip. e M.O. (%)</label>
-                  <input type="number" min="0" value={equipmentRentalPct} onChange={e => setEquipmentRentalPct(Number(e.target.value))} className={iCls} />
+                  <input type="text" inputMode="decimal" value={equipmentRentalPct} onChange={e => setEquipmentRentalPct(e.target.value)} className={iCls} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor (R$)</label>
-                  <input type="number" min="0" step="0.01" value={equipmentRentalValue} onChange={e => setEquipmentRentalValue(Number(e.target.value))} className={iCls} />
+                  <input type="text" inputMode="decimal" value={equipmentRentalValue} onChange={e => setEquipmentRentalValue(e.target.value)} className={iCls} />
                 </div>
               </div>
               <div className="flex justify-between text-sm items-center">
                 <span className="text-slate-600">Descontos (R$)</span>
-                <input type="number" min="0" step="0.01" value={discount} onChange={e => setDiscount(Number(e.target.value))}
+                <input type="text" inputMode="decimal" value={discount} onChange={e => setDiscount(e.target.value)}
                   className="w-24 px-2 py-1 border border-orange-300 rounded text-sm text-right focus:outline-none focus:ring-1 focus:ring-orange-400 bg-white" />
               </div>
               <div className="flex justify-between text-sm items-center">
                 <span className="text-slate-600">Impostos (R$)</span>
-                <input type="number" min="0" step="0.01" value={taxes} onChange={e => setTaxes(Number(e.target.value))}
+                <input type="text" inputMode="decimal" value={taxes} onChange={e => setTaxes(e.target.value)}
                   className="w-24 px-2 py-1 border border-orange-300 rounded text-sm text-right focus:outline-none focus:ring-1 focus:ring-orange-400 bg-white" />
               </div>
               <div className="flex justify-between text-base font-bold border-t border-slate-100 pt-2">
@@ -643,7 +644,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                 ].map(f => (
                   <div key={f.label}>
                     <label className="block text-sm font-medium text-slate-700 mb-1.5">{f.label}</label>
-                    <input type="number" min="0" step="0.01" value={f.val} onChange={e => f.set(Number(e.target.value))} className={iCls} />
+                    <input type="text" inputMode="decimal" value={f.val} onChange={e => f.set(e.target.value)} className={iCls} />
                   </div>
                 ))}
               </div>
@@ -651,20 +652,20 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Material (R$)</label>
-                  <input type="number" min="0" step="0.01" value={ownMaterialCost} onChange={e => setOwnMaterialCost(Number(e.target.value))} className={iCls} />
+                  <input type="text" inputMode="decimal" value={ownMaterialCost} onChange={e => setOwnMaterialCost(e.target.value)} className={iCls} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Combustível (R$)</label>
-                  <input type="number" min="0" step="0.01" value={ownFuelCost} onChange={e => setOwnFuelCost(Number(e.target.value))} className={iCls} />
+                  <input type="text" inputMode="decimal" value={ownFuelCost} onChange={e => setOwnFuelCost(e.target.value)} className={iCls} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Outros Custos (R$)</label>
-                  <input type="number" min="0" step="0.01" value={ownOtherCost} onChange={e => setOwnOtherCost(Number(e.target.value))} className={iCls} />
+                  <input type="text" inputMode="decimal" value={ownOtherCost} onChange={e => setOwnOtherCost(e.target.value)} className={iCls} />
                 </div>
-                {(ownMaterialCost + ownFuelCost + ownOtherCost) > 0 && (
+                {(p(ownMaterialCost) + p(ownFuelCost) + p(ownOtherCost)) > 0 && (
                   <div className="col-span-2 sm:col-span-3 bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex justify-between items-center">
                     <span className="text-sm font-medium text-emerald-800">Total de Custos:</span>
-                    <span className="text-sm font-bold text-emerald-800">R$ {(ownMaterialCost + ownFuelCost + ownOtherCost).toFixed(2)}</span>
+                    <span className="text-sm font-bold text-emerald-800">R$ {(p(ownMaterialCost) + p(ownFuelCost) + p(ownOtherCost)).toFixed(2)}</span>
                   </div>
                 )}
               </div>
@@ -745,11 +746,11 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor Pago (R$)</label>
-                  <input type="number" min="0" step="0.01" value={amountPaid} onChange={e => setAmountPaid(Number(e.target.value))} className={iCls} />
+                  <input type="text" inputMode="decimal" value={amountPaid} onChange={e => setAmountPaid(e.target.value)} className={iCls} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor Restante (R$)</label>
-                  <input type="number" min="0" step="0.01" value={remainingAmount} onChange={e => setRemainingAmount(Number(e.target.value))} className={iCls} />
+                  <input type="text" inputMode="decimal" value={remainingAmount} onChange={e => setRemainingAmount(e.target.value)} className={iCls} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Data do Restante</label>
