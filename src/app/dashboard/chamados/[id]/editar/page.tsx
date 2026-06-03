@@ -514,8 +514,8 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                 {items.filter(i => !selectedServiceTypes.includes(i.id)).map(item => (
                   <div key={item.id} className="grid grid-cols-12 gap-2 items-center">
                     <div className="col-span-2">
-                      <input type="number" min="0.01" step="0.01" value={item.quantity}
-                        onChange={e => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                      <input type="text" inputMode="decimal" value={item.quantity || ''}
+                        onChange={e => updateItem(item.id, 'quantity', parseFloat(e.target.value.replace(',', '.')) || 0)}
                         className="w-full px-2 py-2 border border-orange-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-orange-400 bg-white" />
                     </div>
                     <div className="col-span-6">
@@ -524,8 +524,8 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                         className="w-full px-2 py-2 border border-orange-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-orange-400 bg-white" />
                     </div>
                     <div className="col-span-2">
-                      <input type="number" min="0" step="0.01" value={item.unit_price}
-                        onChange={e => updateItem(item.id, 'unit_price', parseFloat(e.target.value) || 0)}
+                      <input type="text" inputMode="decimal" value={item.unit_price || ''}
+                        onChange={e => updateItem(item.id, 'unit_price', parseFloat(e.target.value.replace(',', '.')) || 0)}
                         className="w-full px-2 py-2 border border-orange-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-orange-400 bg-white" />
                     </div>
                     <div className="col-span-1 text-xs text-slate-600 font-medium text-center">{(item.quantity * item.unit_price).toFixed(2)}</div>
