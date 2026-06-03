@@ -15,7 +15,7 @@ import { p } from '@/lib/parse-decimal'
 type ServiceExecType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
 type PaymentStatus = 'pago' | 'pago_parcial' | 'pendente'
 type BillingSystem = 'metro_linear' | 'metro_cubico' | 'litros' | 'carga' | 'valor_fechado' | 'metro_quadrado'
-interface Item { id: string; quantity: number; description: string; unit_price: number }
+interface Item { id: string; quantity: string; description: string; unit_price: string }
 
 const SERVICE_TYPES_OPTIONS = [
   { id: 'desentupidora_ralo', label: 'Desentupidora de Ralo' },
@@ -76,7 +76,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [serviceExecType, setServiceExecType] = useState<ServiceExecType>('proprio')
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('pendente')
   const [billingSystems, setBillingSystems] = useState<BillingSystem[]>([])
-  const [items, setItems] = useState<Item[]>([{ id: '1', quantity: 1, description: '', unit_price: 0 }])
+  const [items, setItems] = useState<Item[]>([{ id: '1', quantity: '', description: '', unit_price: '' }])
   const [discount, setDiscount] = useState('')
   const [taxes, setTaxes] = useState('')
   const [equipmentRentalPct, setEquipmentRentalPct] = useState('')
@@ -168,9 +168,9 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         if (so.items?.length) {
           setItems(so.items.map((item: any) => ({
             id: item.id,
-            quantity: Number(item.quantity),
+            quantity: String(item.quantity ?? ''),
             description: item.description,
-            unit_price: Number(item.unit_price),
+            unit_price: String(item.unit_price ?? ''),
           })))
         }
       }
@@ -201,9 +201,9 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
       const billingLabel = calc.billing ? BILLING_FOR_TYPE[typeId]?.find(b => b.value === calc.billing)?.label ?? '' : ''
       generated.push({
         id: typeId,
-        quantity: p(calc.quantity),
+        quantity: calc.quantity,
         description: `${typeName}${billingLabel ? ` - ${billingLabel}` : ''}`,
-        unit_price: p(calc.unitPrice),
+        unit_price: calc.unitPrice,
       })
     }
     const manualItems = items.filter(i => i.description.trim() && !selectedServiceTypes.includes(i.id))
@@ -211,10 +211,10 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   }
 
   const allItems = isApproved ? buildItemsFromCalcs() : []
-  const subtotal = allItems.reduce((s, i) => s + i.quantity * i.unit_price, 0)
+  const subtotal = allItems.reduce((s, i) => s + p(i.quantity) * p(i.unit_price), 0)
   const total = subtotal + p(equipmentRentalValue) - p(discount) + p(taxes)
 
-  const addItem = () => setItems(prev => [...prev, { id: Date.now().toString(), quantity: 1, description: '', unit_price: 0 }])
+  const addItem = () => setItems(prev => [...prev, { id: Date.now().toString(), quantity: '', description: '', unit_price: '' }])
   const removeItem = (itemId: string) => setItems(prev => prev.filter(i => i.id !== itemId))
   const updateItem = (itemId: string, field: keyof Item, value: string | number) =>
     setItems(prev => prev.map(i => i.id === itemId ? { ...i, [field]: value } : i))
@@ -244,9 +244,9 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
 
       if (isApproved) {
         const finalItems = allItems.filter(i => i.description.trim()).map(i => ({
-          quantity: i.quantity,
+          quantity: p(i.quantity),
           description: i.description,
-          unit_price: i.unit_price,
+          unit_price: p(i.unit_price),
         }))
 
         const orderData: Record<string, any> = {
@@ -488,7 +488,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                           </label>
                           <input type="text" inputMode="decimal"
                             value={serviceCalcs[st.id].quantity || ''}
-                            onChange={e => updateCalc(st.id, 'quantity', parseFloat(e.target.value.replace(',', '.')) || 0)}
+                            onChange={e => updateCalc(st.id, 'quantity', e.target.value)}
                             className="w-full px-2 py-1.5 border border-orange-300 rounded text-xs bg-white focus:outline-none focus:ring-1 focus:ring-orange-400" />
                         </div>
                         <div>
@@ -497,7 +497,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                           </label>
                           <input type="text" inputMode="decimal"
                             value={serviceCalcs[st.id].unitPrice || ''}
-                            onChange={e => updateCalc(st.id, 'unitPrice', parseFloat(e.target.value.replace(',', '.')) || 0)}
+                            onChange={e => updateCalc(st.id, 'unitPrice', e.target.value)}
                             className="w-full px-2 py-1.5 border border-orange-300 rounded text-xs bg-white focus:outline-none focus:ring-1 focus:ring-orange-400" />
                         </div>
                         <div>
@@ -521,7 +521,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                   <div key={item.id} className="grid grid-cols-12 gap-2 items-center">
                     <div className="col-span-2">
                       <input type="text" inputMode="decimal" value={item.quantity || ''}
-                        onChange={e => updateItem(item.id, 'quantity', parseFloat(e.target.value.replace(',', '.')) || 0)}
+                        onChange={e => updateItem(item.id, 'quantity', e.target.value)}
                         className="w-full px-2 py-2 border border-orange-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-orange-400 bg-white" />
                     </div>
                     <div className="col-span-6">
@@ -531,10 +531,10 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                     </div>
                     <div className="col-span-2">
                       <input type="text" inputMode="decimal" value={item.unit_price || ''}
-                        onChange={e => updateItem(item.id, 'unit_price', parseFloat(e.target.value.replace(',', '.')) || 0)}
+                        onChange={e => updateItem(item.id, 'unit_price', e.target.value)}
                         className="w-full px-2 py-2 border border-orange-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-orange-400 bg-white" />
                     </div>
-                    <div className="col-span-1 text-xs text-slate-600 font-medium text-center">{(item.quantity * item.unit_price).toFixed(2)}</div>
+                    <div className="col-span-1 text-xs text-slate-600 font-medium text-center">{(p(item.quantity) * p(item.unit_price)).toFixed(2)}</div>
                     <div className="col-span-1 flex justify-center">
                       <button type="button" onClick={() => removeItem(item.id)} className="text-red-400 hover:text-red-600">
                         <Trash2 className="w-3.5 h-3.5" />
