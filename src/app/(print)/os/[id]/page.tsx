@@ -229,7 +229,7 @@ export default function OSPage({ params }: { params: Promise<{ id: string }> }) 
                   <span>{item as string}</span>
                 </span>
               ))}
-              {billingSystems.map(bs => (
+              {billingSystems.map((bs: string) => (
                 <span key={bs} className="flex items-center gap-1.5">
                   <span className="inline-block w-3 h-3 border border-black flex items-center justify-center text-[10px]">✓</span>
                   <span>{billingLabel[bs] ?? bs}</span>
