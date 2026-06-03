@@ -92,7 +92,7 @@ export default function NovoChamadoPage() {
   // OS
   const [serviceExecType, setServiceExecType] = useState<ServiceExecType>('proprio')
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('pendente')
-  const [billingSystem, setBillingSystem] = useState<BillingSystem | ''>('')
+  const [billingSystems, setBillingSystems] = useState<BillingSystem[]>([])
   const [items, setItems] = useState<Item[]>([{ id: '1', quantity: 1, description: '', unit_price: 0 }])
   const [discount, setDiscount] = useState('')
   const [taxes, setTaxes] = useState('')
@@ -109,6 +109,8 @@ export default function NovoChamadoPage() {
   const [hasNoGuarantee, setHasNoGuarantee] = useState(false)
   const [teamId, setTeamId] = useState('')
   const [auxiliaryId, setAuxiliaryId] = useState('')
+  const [partnerName, setPartnerName] = useState('')
+  const [myRevenuePct, setMyRevenuePct] = useState('100')
   const [driver, setDriver] = useState('')
   const [nfNumber, setNfNumber] = useState('')
   const [vehicle, setVehicle] = useState('')
@@ -286,7 +288,7 @@ export default function NovoChamadoPage() {
           date: isApproved ? callDate : (scheduledDate || callDate),
           client_id: finalClientId || null,
           service_type: isApproved ? serviceExecType : 'proprio',
-          billing_system: billingSystem || null,
+          billing_system: billingSystems.join(',') || null,
           payment_status: isApproved ? paymentStatus : 'pendente',
           subtotal: isApproved ? subtotal : 0,
           total_value: isApproved ? total : 0,
@@ -296,6 +298,8 @@ export default function NovoChamadoPage() {
           Object.assign(orderData, {
             team_id: teamId || null,
             auxiliary_id: auxiliaryId || null,
+            partner_name: partnerName || null,
+            my_revenue_pct: p(myRevenuePct) || 100,
             driver: driver || null,
             nf_number: nfNumber || null,
             vehicle: vehicle || null,
@@ -748,6 +752,37 @@ export default function NovoChamadoPage() {
             </div>
           </div>
 
+          {/* Split de parceiro */}
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
+            <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3">Parceiro Terceirizado</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Nome da empresa parceira <span className="text-slate-400 font-normal">(se houver)</span></label>
+                <input type="text" value={partnerName} onChange={e => setPartnerName(e.target.value)}
+                  placeholder="Ex: Elite Desentupidora"
+                  className={iCls} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Minha % da receita</label>
+                <input type="text" inputMode="decimal" value={myRevenuePct} onChange={e => setMyRevenuePct(e.target.value)}
+                  placeholder="100"
+                  className={iCls} />
+              </div>
+            </div>
+            {partnerName && total > 0 && (
+              <div className="grid grid-cols-2 gap-3 mt-2">
+                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-emerald-700 mb-1">Minha receita ({myRevenuePct || 100}%)</p>
+                  <p className="text-lg font-bold text-emerald-800">R$ {(total * p(myRevenuePct) / 100).toFixed(2)}</p>
+                </div>
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-orange-700 mb-1">Repasse a {partnerName} ({(100 - p(myRevenuePct)).toFixed(0)}%)</p>
+                  <p className="text-lg font-bold text-orange-700">R$ {(total * (100 - p(myRevenuePct)) / 100).toFixed(2)}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Tipo execução */}
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
             <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3">Tipo de Execução</h2>
@@ -821,8 +856,8 @@ export default function NovoChamadoPage() {
               {(['metro_linear','metro_cubico','litros','carga','valor_fechado','metro_quadrado'] as BillingSystem[]).map(b => {
                 const labels: Record<string,string> = { metro_linear:'Metro Linear', metro_cubico:'Metro Cúbico', litros:'Litros', carga:'Carga', valor_fechado:'Valor Fechado', metro_quadrado:'Metro Quadrado' }
                 return (
-                  <button key={b} type="button" onClick={() => setBillingSystem(billingSystem === b ? '' : b)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${billingSystem === b ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-200 text-slate-600 hover:border-orange-300'}`}>
+                  <button key={b} type="button" onClick={() => setBillingSystems(prev => prev.includes(b) ? prev.filter(x => x !== b) : [...prev, b])}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${billingSystems.includes(b) ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-200 text-slate-600 hover:border-orange-300'}`}>
                     {labels[b]}
                   </button>
                 )

@@ -92,6 +92,8 @@ export default function OSPage({ params }: { params: Promise<{ id: string }> }) 
     so.has_no_guarantee && 'Sem garantia',
   ].filter(Boolean)
 
+  const billingSystems = (so.billing_system ?? '').split(',').filter(Boolean)
+
   return (
     <>
       {/* App header — only visible on screen, hidden on print */}
@@ -227,12 +229,12 @@ export default function OSPage({ params }: { params: Promise<{ id: string }> }) 
                   <span>{item as string}</span>
                 </span>
               ))}
-              {so.billing_system && (
-                <span className="flex items-center gap-1.5">
+              {billingSystems.map(bs => (
+                <span key={bs} className="flex items-center gap-1.5">
                   <span className="inline-block w-3 h-3 border border-black flex items-center justify-center text-[10px]">✓</span>
-                  <span>{billingLabel[so.billing_system] ?? so.billing_system}</span>
+                  <span>{billingLabel[bs] ?? bs}</span>
                 </span>
-              )}
+              ))}
             </div>
           </div>
         )}

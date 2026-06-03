@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Plus, Search, CheckCircle, XCircle, Clock, ChevronRight } from 'lucide-react'
+import { Plus, Search, CheckCircle, XCircle, Clock, ChevronRight, CalendarDays, List, ChevronLeft } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { getCalls, updateCall } from '@/lib/db/calls'
@@ -38,12 +38,25 @@ const filters: { value: Status; label: string }[] = [
   { value: 'cancelado', label: 'Cancelado' },
 ]
 
+const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+
+function buildCalendar(year: number, month: number) {
+  const first = new Date(year, month, 1)
+  const last = new Date(year, month + 1, 0)
+  const days: (number | null)[] = Array(first.getDay()).fill(null)
+  for (let d = 1; d <= last.getDate(); d++) days.push(d)
+  return days
+}
+
 export default function ChamadosPage() {
   const router = useRouter()
+  const [view, setView] = useState<'list' | 'calendar'>('list')
+  const [calDate, setCalDate] = useState(() => new Date())
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<Status>('todos')
   const [calls, setCalls] = useState<any[]>([])
+  const [allCalls, setAllCalls] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [quickUpdating, setQuickUpdating] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -75,8 +88,12 @@ export default function ChamadosPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await getCalls({ status: statusFilter, search: debouncedSearch })
-      setCalls(data)
+      const [filtered, all] = await Promise.all([
+        getCalls({ status: statusFilter, search: debouncedSearch }),
+        getCalls({ status: 'agendado' }),
+      ])
+      setCalls(filtered)
+      setAllCalls(all)
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
   }, [statusFilter, debouncedSearch])
@@ -91,12 +108,25 @@ export default function ChamadosPage() {
           <h1 className="text-2xl font-bold text-zinc-900">Chamados</h1>
           <p className="text-zinc-500 text-sm mt-0.5 hidden sm:block">Gerencie chamados e ordens de servico</p>
         </div>
-        <Link href="/dashboard/chamados/novo"
-          className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition shadow-sm">
-          <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">Novo Chamado</span>
-          <span className="sm:hidden">Novo</span>
-        </Link>
+        <div className="flex items-center gap-2">
+          {/* Toggle lista/calendário */}
+          <div className="flex border border-zinc-200 rounded-lg overflow-hidden bg-white shadow-sm">
+            <button onClick={() => setView('list')}
+              className={`p-2 transition ${view === 'list' ? 'bg-orange-500 text-white' : 'text-zinc-500 hover:bg-zinc-50'}`}>
+              <List className="w-4 h-4" />
+            </button>
+            <button onClick={() => setView('calendar')}
+              className={`p-2 transition ${view === 'calendar' ? 'bg-orange-500 text-white' : 'text-zinc-500 hover:bg-zinc-50'}`}>
+              <CalendarDays className="w-4 h-4" />
+            </button>
+          </div>
+          <Link href="/dashboard/chamados/novo"
+            className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition shadow-sm">
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">Novo Chamado</span>
+            <span className="sm:hidden">Novo</span>
+          </Link>
+        </div>
       </div>
 
       {/* Search */}
@@ -121,8 +151,76 @@ export default function ChamadosPage() {
         ))}
       </div>
 
+      {/* Calendário */}
+      {view === 'calendar' && (() => {
+        const year = calDate.getFullYear()
+        const month = calDate.getMonth()
+        const days = buildCalendar(year, month)
+        const monthLabel = calDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+        // Group agendado calls by scheduled_date
+        const byDay: Record<string, any[]> = {}
+        for (const c of allCalls) {
+          const d = c.scheduled_date ?? c.date
+          if (!d) continue
+          const [y, m] = d.split('-').map(Number)
+          if (y === year && m - 1 === month) {
+            const day = parseInt(d.split('-')[2])
+            if (!byDay[day]) byDay[day] = []
+            byDay[day].push(c)
+          }
+        }
+        return (
+          <div className="bg-white rounded-2xl border border-zinc-100 shadow-sm p-4">
+            {/* Navigation */}
+            <div className="flex items-center justify-between mb-4">
+              <button onClick={() => setCalDate(new Date(year, month - 1, 1))} className="p-2 hover:bg-zinc-100 rounded-lg transition">
+                <ChevronLeft className="w-4 h-4 text-zinc-500" />
+              </button>
+              <p className="font-semibold text-zinc-800 capitalize">{monthLabel}</p>
+              <button onClick={() => setCalDate(new Date(year, month + 1, 1))} className="p-2 hover:bg-zinc-100 rounded-lg transition">
+                <ChevronRight className="w-4 h-4 text-zinc-500" />
+              </button>
+            </div>
+            {/* Days header */}
+            <div className="grid grid-cols-7 gap-1 mb-1">
+              {WEEKDAYS.map(w => (
+                <div key={w} className="text-center text-[10px] font-semibold text-zinc-400 uppercase py-1">{w}</div>
+              ))}
+            </div>
+            {/* Cells */}
+            <div className="grid grid-cols-7 gap-1">
+              {days.map((day, i) => {
+                const today = new Date()
+                const isToday = day !== null && today.getDate() === day && today.getMonth() === month && today.getFullYear() === year
+                const dayCalls = day ? (byDay[day] ?? []) : []
+                return (
+                  <div key={i} className={`min-h-[56px] rounded-lg p-1 ${day ? 'bg-zinc-50' : ''} ${isToday ? 'ring-2 ring-orange-400 bg-orange-50' : ''}`}>
+                    {day && (
+                      <>
+                        <p className={`text-xs font-semibold mb-0.5 ${isToday ? 'text-orange-600' : 'text-zinc-500'}`}>{day}</p>
+                        <div className="space-y-0.5">
+                          {dayCalls.slice(0, 2).map(c => (
+                            <Link key={c.id} href={`/dashboard/chamados/${c.id}`}
+                              className="block text-[9px] leading-tight bg-blue-100 text-blue-800 rounded px-1 py-0.5 truncate hover:bg-blue-200 transition">
+                              {c.scheduled_time ? String(c.scheduled_time).slice(0,5) + ' ' : ''}{c.client?.name ?? c.contact_name ?? 'Chamado'}
+                            </Link>
+                          ))}
+                          {dayCalls.length > 2 && (
+                            <p className="text-[9px] text-zinc-400 pl-1">+{dayCalls.length - 2}</p>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Cards */}
-      {loading ? (
+      {view === 'list' && (loading ? (
         <div className="space-y-3">
           {[...Array(4)].map((_, i) => (
             <div key={i} className="bg-white rounded-2xl border border-zinc-100 p-4 animate-pulse h-20" />
@@ -196,7 +294,7 @@ export default function ChamadosPage() {
             )
           })}
         </div>
-      )}
+      ))}
     </div>
   )
 }
